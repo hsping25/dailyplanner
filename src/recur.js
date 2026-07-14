@@ -59,6 +59,7 @@ export function expandEvent(event, rangeStart, rangeEnd, exceptions = []) {
       out.push({
         eventId: event.id, title, start, end,
         recurring: !!event.rrule, occurrenceDate: occDate,
+        allday: !!event.allday,
       });
     }
   };

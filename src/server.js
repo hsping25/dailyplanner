@@ -6,6 +6,8 @@ import { parseText } from "./parse.js";
 import { pad, todayStr, shiftDate, dayWindow, eventsInWindow } from "./day.js";
 import { startNotifier } from "./notify.js";
 import { startSchedules } from "./schedule.js";
+import { getBotUsername } from "./telegram.js";
+import { linkCode, linkStatus, unlink, startTgPoller } from "./tglink.js";
 
 const app = express();
 app.use(express.json());
@@ -51,7 +53,9 @@ function weekFor(date, user) {
     const dayDate = shiftDate(monday, i);
     const w = dayWindow(dayDate);
     const items = eventsInWindow(w.start, w.end, user).map(e => ({
-      kind: "event", title: e.title, start: e.start, recurring: e.recurring,
+      kind: "event", title: e.title, start: e.start, end: e.end,
+      recurring: e.recurring, eventId: e.eventId, occurrenceDate: e.occurrenceDate,
+      allday: e.allday,
     }));
     for (const t of db.prepare("SELECT title FROM tasks WHERE user = ? AND done = 0 AND due = ?").all(user, dayDate)) {
       items.push({ kind: "task", title: t.title });
@@ -74,6 +78,21 @@ app.get("/api/conflicts", (req, res) => {
   res.json({ conflicts: eventsInWindow(start, end, userOf(req)) });
 });
 
+// ── 텔레그램 알림 연결 (아이디별) ──
+app.post("/api/telegram/link", async (req, res) => {
+  const bot = await getBotUsername();
+  if (!bot) return res.status(400).json({ error: "봇 토큰이 설정되지 않았어요. .env의 TELEGRAM_BOT_TOKEN을 확인하세요." });
+  const code = linkCode(userOf(req));
+  res.json({ url: `https://t.me/${bot}?start=${code}`, bot, code });
+});
+app.get("/api/telegram/status", (req, res) => {
+  res.json({ linked: !!linkStatus(userOf(req)) });
+});
+app.post("/api/telegram/unlink", (req, res) => {
+  unlink(userOf(req));
+  res.json({ ok: true });
+});
+
 // ── 자연어 파싱 ──
 app.post("/api/parse", async (req, res) => {
   const { text, history = [] } = req.body;
@@ -87,10 +106,10 @@ app.post("/api/parse", async (req, res) => {
 
 // ── 일정 CRUD (모두 요청 아이디로 범위 제한) ──
 app.post("/api/events", (req, res) => {
-  const { title, start, end, rrule = null } = req.body;
+  const { title, start, end, rrule = null, allday = 0 } = req.body;
   if (!title || !start || !end) return res.status(400).json({ error: "title, start, end는 필수" });
-  const r = db.prepare("INSERT INTO events (user, title, start, end, rrule) VALUES (?, ?, ?, ?, ?)")
-    .run(userOf(req), title, start, end, rrule);
+  const r = db.prepare("INSERT INTO events (user, title, start, end, rrule, allday) VALUES (?, ?, ?, ?, ?, ?)")
+    .run(userOf(req), title, start, end, rrule, allday ? 1 : 0);
   res.json({ id: Number(r.lastInsertRowid) });
 });
 
@@ -101,10 +120,10 @@ app.get("/api/events/:id", (req, res) => {
 });
 
 app.put("/api/events/:id", (req, res) => {
-  const { title, start, end, rrule = null } = req.body;
+  const { title, start, end, rrule = null, allday = 0 } = req.body;
   if (!title || !start || !end) return res.status(400).json({ error: "title, start, end는 필수" });
-  const r = db.prepare("UPDATE events SET title = ?, start = ?, end = ?, rrule = ? WHERE id = ? AND user = ?")
-    .run(title, start, end, rrule, req.params.id, userOf(req));
+  const r = db.prepare("UPDATE events SET title = ?, start = ?, end = ?, rrule = ?, allday = ? WHERE id = ? AND user = ?")
+    .run(title, start, end, rrule, allday ? 1 : 0, req.params.id, userOf(req));
   if (r.changes === 0) return res.status(404).json({ error: "없는 일정" });
   res.json({ ok: true });
 });
@@ -167,3 +186,4 @@ const PORT = process.env.PORT || 3456;
 app.listen(PORT, () => console.log(`planner listening on http://localhost:${PORT}`));
 startNotifier();
 startSchedules();
+startTgPoller();

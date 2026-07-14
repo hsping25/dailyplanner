@@ -5,31 +5,30 @@ import { db } from "./db.js";
 import { todayStr, dayWindow, eventsInWindow } from "./day.js";
 import { sendTelegram } from "./telegram.js";
 
-// 알림은 이 아이디의 일정/할 일만 대상으로 한다 (.env의 NOTIFY_USER, 기본 '기본')
-const NOTIFY_USER = process.env.NOTIFY_USER || "기본";
 const DAY = ["일", "월", "화", "수", "목", "금", "토"];
 const hm = s => {
   const [h, m] = s.split("T")[1].split(":");
   return m === "00" ? `${Number(h)}시` : `${Number(h)}시 ${Number(m)}분`;
 };
 
-function composeBriefing() {
+export function composeBriefing(user) {
   const date = todayStr();
   const [y, m, d] = date.split("-").map(Number);
   const dayName = DAY[new Date(y, m - 1, d).getDay()];
   const { start, end } = dayWindow(date);
-  const events = eventsInWindow(start, end, NOTIFY_USER);
-  const todayTasks = db.prepare("SELECT * FROM tasks WHERE user = ? AND done = 0 AND due = ?").all(NOTIFY_USER, date);
-  const overdue = db.prepare("SELECT * FROM tasks WHERE user = ? AND done = 0 AND due < ? ORDER BY due").all(NOTIFY_USER, date);
+  const events = eventsInWindow(start, end, user);
+  const todayTasks = db.prepare("SELECT * FROM tasks WHERE user = ? AND done = 0 AND due = ?").all(user, date);
+  const overdue = db.prepare("SELECT * FROM tasks WHERE user = ? AND done = 0 AND due < ? ORDER BY due").all(user, date);
 
   const lines = [`🌅 ${m}월 ${d}일 ${dayName}요일`];
 
   if (events.length === 0) {
     lines.push("오늘은 일정이 없어요.");
   } else {
-    const list = events.map(e => `${hm(e.start)} ${e.title}`).join(", ");
+    const list = events.map(e => `${e.allday ? "종일" : hm(e.start)} ${e.title}`).join(", ");
     lines.push(`오늘 일정 ${events.length}개 — ${list}.`);
-    lines.push(`첫 일정은 ${hm(events[0].start)} ${events[0].title}예요.`);
+    const firstTimed = events.find(e => !e.allday);
+    if (firstTimed) lines.push(`첫 일정은 ${hm(firstTimed.start)} ${firstTimed.title}예요.`);
   }
 
   const taskBits = [
@@ -44,8 +43,15 @@ function composeBriefing() {
   return lines.join("\n");
 }
 
+// 특정 아이디의 브리핑을 그 사람 chat_id로 전송
+export async function sendBriefingTo(user, chatId) {
+  return sendTelegram(composeBriefing(user), chatId);
+}
+
+// 레거시 수동 실행(npm run brief): NOTIFY_USER를 .env의 기본 chat으로
 export async function sendBriefing() {
-  const ok = await sendTelegram(composeBriefing());
+  const user = process.env.NOTIFY_USER || "기본";
+  const ok = await sendTelegram(composeBriefing(user));
   console.log(ok ? "브리핑 전송 완료" : "브리핑 전송 생략(텔레그램 미설정)");
   return ok;
 }

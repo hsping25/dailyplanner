@@ -12,6 +12,9 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="오늘">
 <style>
+  /* 라이트 = 기본값. 다크 값은 아래 한 곳에만 두고 두 경우에 재사용:
+     (1) 사용자가 직접 다크 선택: html[data-theme="dark"]
+     (2) 선택 안 함 + 시스템이 다크: html:not([data-theme]) + media */
   :root {
     --bg: #ffffff;
     --ink: #111318;
@@ -22,8 +25,18 @@
     --line: #eceef1;
     --card: #f6f7f9;
   }
+  :root[data-theme="dark"] {
+    --bg: #101216;
+    --ink: #f2f3f5;
+    --ink-dim: #6b7280;
+    --accent: #60a5fa;
+    --accent2: #2dd4bf;
+    --warn: #f87171;
+    --line: #23262c;
+    --card: #191c21;
+  }
   @media (prefers-color-scheme: dark) {
-    :root {
+    :root:not([data-theme]) {
       --bg: #101216;
       --ink: #f2f3f5;
       --ink-dim: #6b7280;
@@ -47,12 +60,60 @@
     margin: 0 auto;
   }
 
-  /* ── 오늘 날짜 + 뷰 전환 ── */
+  /* ── 날짜 이동 + 테마 + 뷰 전환 ── */
   .top {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 6px;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .datenav {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+  }
+  .nav-arrow, .icon-btn {
+    width: 38px; height: 38px;
+    flex-shrink: 0;
+    border: none;
+    border-radius: 10px;
+    background: var(--card);
+    color: var(--ink);
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+  }
+  .icon-btn { font-size: 18px; }
+  .datenav-mid {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  #view-date { font-size: 17px; font-weight: 800; white-space: nowrap; }
+  #day-today {
+    border: none;
+    background: var(--accent);
+    color: #fff;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 5px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .subtop {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
   }
   .date {
     font-size: 15px;
@@ -457,7 +518,7 @@
   .two { display: flex; gap: 12px; }
   .two .fld { flex: 1; }
   .sheet-btns { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
-  .sheet-btns button {
+  .sheet-btns button, .sheet-btns a {
     font-family: inherit;
     font-size: 17px;
     font-weight: 700;
@@ -465,6 +526,9 @@
     border: none;
     border-radius: 12px;
     cursor: pointer;
+    text-align: center;
+    text-decoration: none;
+    display: block;
   }
   .sheet-btns .ok { background: var(--accent); color: #fff; }
   .sheet-btns .no { background: var(--card); color: var(--ink); }
@@ -551,16 +615,142 @@
     cursor: pointer;
   }
   .login-hint { font-size: 14px; color: var(--ink-dim); margin-top: 16px; line-height: 1.6; }
+
+  /* ── 주간 점: 선택된 날 강조 + 날짜 숫자 + 탭 가능 ── */
+  .week-hint { font-size: 12px; color: var(--ink-dim); }
+  .day { cursor: pointer; padding: 4px 2px; border-radius: 10px; }
+  .day .label { line-height: 1.25; text-align: center; }
+  .day.sel { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+  .day.sel .label { color: var(--accent); font-weight: 800; }
+
+  /* ── 주간 시간표(블록 모드) ── */
+  .wt-wrap { position: relative; }
+  .wt { overflow-x: auto; }
+  .wt-head, .wt-body { display: flex; }
+  .wt-corner, .wt-axis { width: 26px; flex-shrink: 0; }
+  .wt-daylabel {
+    flex: 1; min-width: 34px;
+    text-align: center;
+    padding: 4px 0 6px;
+    cursor: pointer;
+    border-radius: 8px 8px 0 0;
+    line-height: 1.15;
+  }
+  .wt-daylabel span { font-size: 13px; color: var(--ink-dim); display: block; }
+  .wt-daylabel b { font-size: 17px; }
+  .wt-daylabel.today b { color: var(--accent); }
+  .wt-daylabel.sel { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+  .wt-axis { position: relative; }
+  .wt-hour {
+    font-size: 11px;
+    color: var(--ink-dim);
+    text-align: right;
+    padding-right: 4px;
+    box-sizing: border-box;
+    transform: translateY(-6px);
+  }
+  .wt-cols { position: relative; display: flex; flex: 1; }
+  .wt-col {
+    flex: 1; min-width: 34px;
+    position: relative;
+    border-left: 1px solid var(--line);
+    background-image: repeating-linear-gradient(var(--line) 0 1px, transparent 1px 40px);
+  }
+  .wt-col:last-child { border-right: 1px solid var(--line); }
+  .wt-block {
+    position: absolute;
+    left: 1px; right: 1px;
+    background: var(--accent);
+    color: #fff;
+    border-radius: 5px;
+    padding: 2px 4px;
+    overflow: hidden;
+    font-size: 12.5px;
+    font-weight: 600;
+    line-height: 1.2;
+    cursor: pointer;
+  }
+  .wt-block span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .wt-block.rec { background: var(--accent2); }
+  .wt-block.past { opacity: 0.4; }
+  .wt-now {
+    position: absolute; left: 0; right: 0;
+    height: 2px; background: var(--warn); z-index: 3;
+  }
+  .wt-pop {
+    position: absolute;
+    width: 184px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 12px 14px;
+    box-shadow: 0 8px 28px rgba(0,0,0,0.22);
+    z-index: 15;
+  }
+  .wt-pop .wp-title { font-size: 16px; font-weight: 800; margin-bottom: 8px; }
+  .wt-pop .wp-item { display: flex; align-items: baseline; gap: 8px; font-size: 15px; }
+  .wt-pop .wp-item .wp-time { color: var(--accent); font-size: 13px; }
+  .wt-pop .wp-item.recurring .wp-time { color: var(--accent2); }
+  .wt-edit {
+    margin-top: 10px; width: 100%;
+    border: none; border-radius: 8px;
+    background: var(--card); color: var(--ink);
+    font-family: inherit; font-size: 14px; font-weight: 700;
+    padding: 9px 0; cursor: pointer;
+  }
+
+  /* ── 종일 일정 ── */
+  .event.allday .time { color: var(--accent2); font-weight: 700; }
+  /* 목록 시간표: 시간표 위 종일 줄 */
+  .allday-strip { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+  .ad-block {
+    background: var(--accent2); color: #fff;
+    font-size: 15px; font-weight: 700;
+    padding: 8px 12px; border-radius: 10px; cursor: pointer;
+  }
+  /* 주간 시간표: 종일 줄 (헤더와 그리드 사이) */
+  .wt-adrow { display: flex; border-bottom: 1px solid var(--line); margin-bottom: 2px; }
+  .wt-adcorner {
+    width: 26px; flex-shrink: 0;
+    font-size: 10px; color: var(--ink-dim);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .wt-adcell { flex: 1; min-width: 34px; padding: 2px 1px; display: flex; flex-direction: column; gap: 2px; }
+  .wt-adblock {
+    background: var(--accent2); color: #fff;
+    font-size: 11px; font-weight: 600;
+    padding: 2px 4px; border-radius: 4px; cursor: pointer;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+
+  /* ── 가로 모드: 폭을 넓게 쓰고 하단 입력바 여백 줄임 ── */
+  @media (orientation: landscape) {
+    body { max-width: 720px; padding-bottom: 110px; }
+    .next .title { font-size: 30px; }
+    .wt-daylabel, .wt-col { min-width: 60px; }
+  }
 </style>
 </head>
 <body>
 
 <div class="top">
-  <div class="date"><span id="today-date"></span> · <span id="who" class="who"></span></div>
+  <div class="datenav">
+    <button class="nav-arrow" id="day-prev" aria-label="이전 날">‹</button>
+    <div class="datenav-mid">
+      <span id="view-date"></span>
+      <button id="day-today" hidden>오늘</button>
+    </div>
+    <button class="nav-arrow" id="day-next" aria-label="다음 날">›</button>
+  </div>
+  <button class="icon-btn" id="bell-btn" aria-label="알림 연결">🔔</button>
+  <button class="icon-btn" id="theme-btn" aria-label="테마 전환">🌙</button>
+</div>
+<div class="subtop">
   <div class="switch">
     <button id="btn-list" class="on">목록</button>
     <button id="btn-blocks">시간표</button>
   </div>
+  <span id="who" class="who"></span>
 </div>
 
 <div class="next" id="next-event"></div>
@@ -579,10 +769,7 @@
   <section>
     <div class="week-head">
       <h2 id="week-title">이번 주</h2>
-      <div class="week-nav">
-        <button id="wk-prev" aria-label="저번 주">‹</button>
-        <button id="wk-next" aria-label="다음 주">›</button>
-      </div>
+      <span class="week-hint">날짜를 누르면 그날로 이동</span>
     </div>
     <div class="week-wrap">
       <div class="week-pop" id="week-pop" hidden></div>
@@ -593,8 +780,21 @@
 
 <div id="view-blocks">
   <section>
-    <h2>오늘 시간표</h2>
-    <div class="timeline" id="timeline"></div>
+    <div class="week-head">
+      <h2 id="wt-title">시간표</h2>
+      <div class="switch" id="wt-switch">
+        <button id="wt-day" class="on">오늘</button>
+        <button id="wt-week">일주일</button>
+      </div>
+    </div>
+    <div id="day-tl-wrap">
+      <div class="allday-strip" id="day-allday"></div>
+      <div class="timeline" id="timeline"></div>
+    </div>
+    <div class="wt-wrap" id="wt-wrap" style="display:none">
+      <div class="wt-pop" id="wt-pop" hidden></div>
+      <div class="wt" id="week-timeline"></div>
+    </div>
   </section>
 </div>
 
@@ -654,30 +854,53 @@ function renderLogin() {
 const now = new Date();
 const data = await (await apiFetch("/api/day")).json();
 
-const events = data.events.map(e => ({
-  ...e,
-  start: new Date(e.start),
-  end: new Date(e.end),
-}));
-
-const tasks = data.tasks.map(t => ({
-  ...t,
-  done: !!t.done,
-  due: t.due ? new Date(t.due + "T23:59:59") : null,
-}));
-
-const weekCounts = data.week;
-
-// ───────── 렌더링 ─────────
+// ───────── 렌더링 헬퍼 ─────────
 const DAY_NAMES = ["일", "월", "화", "수", "목", "금", "토"];
 const pad = n => String(n).padStart(2, "0");
 const fmtTime = d => `${d.getHours()}:${pad(d.getMinutes())}`;
+const dstr = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const shiftStr = (ds, n) => { const [y, m, d] = ds.split("-").map(Number); return dstr(new Date(y, m - 1, d + n)); };
+const dateObj = ds => { const [y, m, d] = ds.split("-").map(Number); return new Date(y, m - 1, d); };
+const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-// 오늘 날짜 — 서버의 논리적 날짜(새벽 4시 경계) 기준
-const [ty, tm, td] = data.date.split("-").map(Number);
-const logicalToday = new Date(ty, tm - 1, td);
-document.getElementById("today-date").textContent =
-  `${tm}월 ${td}일 ${DAY_NAMES[logicalToday.getDay()]}요일`;
+// ───────── 상태: 현재 보는 날짜 + 그날 데이터 ─────────
+const todayStr = data.date;        // 서버 기준 논리적 오늘(새벽 4시 경계)
+let viewDate = data.date;
+let events = [], tasks = [], weekData = [], taskById = new Map();
+
+function applyData(d) {
+  viewDate = d.date;
+  events = d.events.map(e => ({ ...e, start: new Date(e.start), end: new Date(e.end) }));
+  tasks = d.tasks.map(t => ({ ...t, done: !!t.done, due: t.due ? new Date(t.due + "T23:59:59") : null }));
+  weekData = d.week;
+  taskById = new Map(d.tasks.map(t => [t.id, t]));
+}
+async function loadDay(ds) {
+  const d = await (await apiFetch("/api/day?date=" + ds)).json();
+  applyData(d);
+  renderAll();
+}
+applyData(data);
+
+// 테마(라이트/다크) 토글 — 저장된 선택이 시스템 설정을 덮어씀
+const themeBtn = document.getElementById("theme-btn");
+function applyTheme(t) {
+  if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
+  else document.documentElement.removeAttribute("data-theme"); // 시스템 따라감
+  // 현재 실제 표시 테마 판단해 아이콘 표시
+  const dark = t === "dark" || (t !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
+  themeBtn.textContent = dark ? "☀️" : "🌙";
+}
+let theme = localStorage.getItem("theme") || "auto";
+applyTheme(theme);
+themeBtn.onclick = () => {
+  // auto → light → dark → auto 순환이 아니라, 현재 보이는 것의 반대로 토글
+  const darkNow = document.documentElement.getAttribute("data-theme") === "dark"
+    || (!document.documentElement.hasAttribute("data-theme") && matchMedia("(prefers-color-scheme: dark)").matches);
+  theme = darkNow ? "light" : "dark";
+  localStorage.setItem("theme", theme);
+  applyTheme(theme);
+};
 
 // 아이디 표시 — 터치하면 다른 아이디로 전환
 const whoEl = document.getElementById("who");
@@ -689,7 +912,54 @@ whoEl.onclick = () => {
   }
 };
 
-// 다음 일정 (히어로)
+// 🔔 텔레그램 알림 연결 (아이디별). 딥링크로 "시작"만 누르면 연결.
+let tgPollIv = null;
+function stopTgPoll() { if (tgPollIv) { clearInterval(tgPollIv); tgPollIv = null; } }
+async function openTelegramSheet() {
+  stopTgPoll();
+  const st = await (await apiFetch("/api/telegram/status")).json();
+  if (st.linked) {
+    showSheet(`<div class="sheet-title">텔레그램 알림</div>
+      <div class="fld-note">✅ '${esc(USER)}' 아이디 연결됨</div>
+      <div class="cp-help">아침 7시 브리핑 · 오후 2시 할 일 · 일정 10분 전 알림이 이 텔레그램으로 와요.</div>
+      <div class="sheet-btns">
+        <button class="del" id="tg-unlink">연결 해제</button>
+        <button class="no" id="tg-close">닫기</button>
+      </div>`);
+    document.getElementById("tg-close").onclick = closeSheet;
+    document.getElementById("tg-unlink").onclick = async () => {
+      await apiFetch("/api/telegram/unlink", { method: "POST" });
+      openTelegramSheet();
+    };
+    return;
+  }
+  const r = await apiFetch("/api/telegram/link", { method: "POST" });
+  const j = await r.json();
+  if (!r.ok) {
+    showSheet(`<div class="sheet-title">텔레그램 알림</div>
+      <div class="cp-error">${esc(j.error || "연결 준비 실패")}</div>
+      <div class="sheet-btns"><button class="no" id="tg-close">닫기</button></div>`);
+    document.getElementById("tg-close").onclick = closeSheet;
+    return;
+  }
+  showSheet(`<div class="sheet-title">텔레그램 알림 연결</div>
+    <div class="cp-help">아래 버튼을 누르면 텔레그램이 열려요.<br><b>"시작"(Start)</b>만 누르면 '${esc(USER)}' 아이디에 연결됩니다.</div>
+    <div class="sheet-btns">
+      <a class="ok" id="tg-open" href="${j.url}" target="_blank" rel="noopener">텔레그램 열기</a>
+      <button class="no" id="tg-close">닫기</button>
+    </div>
+    <div class="cp-loading" style="margin-top:8px">연결되면 자동으로 바뀌어요…</div>`);
+  document.getElementById("tg-close").onclick = () => { stopTgPoll(); closeSheet(); };
+  let tries = 0;
+  tgPollIv = setInterval(async () => {
+    if (++tries > 90) return stopTgPoll();          // 3분 후 중단
+    const s = await (await apiFetch("/api/telegram/status")).json();
+    if (s.linked) { stopTgPoll(); openTelegramSheet(); }
+  }, 2000);
+}
+document.getElementById("bell-btn").onclick = openTelegramSheet;
+
+// ───────── 렌더링 ─────────
 function relTime(target) {
   const mins = Math.round((target - now) / 60000);
   if (mins < 1) return "지금";
@@ -697,126 +967,254 @@ function relTime(target) {
   const h = Math.floor(mins / 60), m = mins % 60;
   return m === 0 ? `${h}시간 뒤` : `${h}시간 ${m}분 뒤`;
 }
+
 const nextEl = document.getElementById("next-event");
-const ongoing = events.find(e => e.start <= now && now < e.end);
-const upcoming = events.find(e => e.start > now);
-if (ongoing) {
-  nextEl.innerHTML = `
-    <div class="lead">지금 진행 중</div>
-    <div class="title">${ongoing.title}</div>
-    <div class="sub">${fmtTime(ongoing.end)}까지</div>`;
-} else if (upcoming) {
-  nextEl.innerHTML = `
-    <div class="lead">${relTime(upcoming.start)}</div>
-    <div class="title">${upcoming.title}</div>
-    <div class="sub">${fmtTime(upcoming.start)} – ${fmtTime(upcoming.end)}</div>`;
-} else {
-  nextEl.innerHTML = `
-    <div class="title">오늘 일정 끝</div>
-    <div class="sub">남은 일정이 없어요</div>`;
+const eventsEl = document.getElementById("events");
+const tasksEl = document.getElementById("tasks");
+const viewDateEl = document.getElementById("view-date");
+const todayBtn = document.getElementById("day-today");
+const evTimeLabel = e => e.allday ? "종일" : fmtTime(e.start);
+
+function renderDateNav() {
+  const o = dateObj(viewDate);
+  let label = `${o.getMonth() + 1}월 ${o.getDate()}일 (${DAY_NAMES[o.getDay()]})`;
+  if (viewDate === todayStr) label = "오늘 · " + label;
+  else if (viewDate === shiftStr(todayStr, 1)) label = "내일 · " + label;
+  else if (viewDate === shiftStr(todayStr, -1)) label = "어제 · " + label;
+  viewDateEl.textContent = label;
+  todayBtn.hidden = viewDate === todayStr;
 }
 
-// 오늘 일정 목록
-const eventsEl = document.getElementById("events");
-if (events.length === 0) {
-  eventsEl.innerHTML = `<div class="empty">오늘은 일정이 없어요</div>`;
-} else {
-  eventsEl.innerHTML = events.map(e => {
-    const cls = [
-      "event",
-      e.recurring ? "recurring" : "",
-      e.end <= now ? "past" : "",
-    ].join(" ");
-    return `
-      <div class="${cls}" data-id="${e.eventId}" data-date="${e.occurrenceDate}">
-        <div class="time">${fmtTime(e.start)}</div>
-        <div class="name">${e.title}</div>
-      </div>`;
+// 히어로: 오늘이면 다음 (시각 있는) 일정, 다른 날이면 그날 요약. 종일 일정은 시각 로직에서 제외.
+function renderHero() {
+  const timed = events.filter(e => !e.allday);
+  if (viewDate === todayStr) {
+    const ongoing = timed.find(e => e.start <= now && now < e.end);
+    const upcoming = timed.find(e => e.start > now);
+    if (ongoing) nextEl.innerHTML = `<div class="lead">지금 진행 중</div><div class="title">${esc(ongoing.title)}</div><div class="sub">${fmtTime(ongoing.end)}까지</div>`;
+    else if (upcoming) nextEl.innerHTML = `<div class="lead">${relTime(upcoming.start)}</div><div class="title">${esc(upcoming.title)}</div><div class="sub">${fmtTime(upcoming.start)} – ${fmtTime(upcoming.end)}</div>`;
+    else if (events.length) { const f = events[0]; nextEl.innerHTML = `<div class="lead">${f.allday ? "종일" : "오늘"}</div><div class="title">${esc(f.title)}</div><div class="sub">오늘 일정 ${events.length}개</div>`; }
+    else nextEl.innerHTML = `<div class="title">오늘 일정 끝</div><div class="sub">남은 일정이 없어요</div>`;
+  } else if (events.length) {
+    const f = events[0];
+    nextEl.innerHTML = `<div class="lead">일정 ${events.length}개</div><div class="title">${esc(f.title)}</div><div class="sub">${f.allday ? "종일" : "첫 일정 " + fmtTime(f.start)}</div>`;
+  } else {
+    nextEl.innerHTML = `<div class="title">일정 없음</div><div class="sub">이 날은 비어 있어요</div>`;
+  }
+}
+
+function renderEvents() {
+  if (!events.length) { eventsEl.innerHTML = `<div class="empty">일정이 없어요</div>`; return; }
+  // 종일 일정을 위로, 그다음 시각순
+  const sorted = [...events].sort((a, b) => (b.allday ? 1 : 0) - (a.allday ? 1 : 0) || a.start - b.start);
+  eventsEl.innerHTML = sorted.map(e => {
+    const past = !e.allday && e.end <= now;
+    const cls = ["event", e.recurring ? "recurring" : "", e.allday ? "allday" : "", past ? "past" : ""].join(" ");
+    return `<div class="${cls}" data-id="${e.eventId}" data-date="${e.occurrenceDate}">
+      <div class="time">${evTimeLabel(e)}</div><div class="name">${esc(e.title)}</div></div>`;
   }).join("");
 }
-// 일정 터치 → 수정/삭제 모달
-eventsEl.addEventListener("click", (ev) => {
+
+function renderTasks() {
+  const startOfToday = dateObj(todayStr);
+  const endOfToday = new Date(startOfToday); endOfToday.setDate(endOfToday.getDate() + 1);
+  const html = tasks.map(t => {
+    const overdue = !t.done && t.due && t.due < startOfToday;
+    const cls = ["task", t.done ? "done" : "", overdue ? "overdue" : ""].join(" ");
+    let due = "";
+    if (overdue) { const days = Math.ceil((startOfToday - t.due) / 86400000); due = `${days}일 지남`; }
+    else if (t.due && !t.done) due = t.due < endOfToday ? "오늘까지" : `${t.due.getMonth() + 1}/${t.due.getDate()}까지`;
+    return `<div class="${cls}" data-id="${t.id}" data-done="${t.done ? 1 : 0}">
+      <div class="box">${t.done ? "✓" : ""}</div><div class="name">${esc(t.title)}</div>
+      ${due ? `<div class="due">${due}</div>` : ""}</div>`;
+  }).join("");
+  tasksEl.innerHTML = html || `<div class="empty">할 일이 없어요</div>`;
+}
+
+// ── 주간 시간표 (블록 모드) — 오전 6시 ~ 다음날 오전 4시, 7일 한눈에 ──
+const WT_START = 6, WT_END = 28, WT_HOUR = 40;
+const wtEl = document.getElementById("week-timeline");
+const wtPop = document.getElementById("wt-pop");
+const wtTitle = document.getElementById("wt-title");
+const wtYof = d => { let h = d.getHours() + d.getMinutes() / 60; if (h < WT_START) h += 24; return (h - WT_START) * WT_HOUR; };
+
+function renderTimeline() {
+  const totalH = (WT_END - WT_START) * WT_HOUR;
+  let head = `<div class="wt-corner"></div>`;
+  weekData.forEach((day, i) => {
+    const o = dateObj(day.date);
+    const cls = ["wt-daylabel", day.date === viewDate ? "sel" : "", day.date === todayStr ? "today" : ""].join(" ");
+    head += `<div class="${cls}" data-date="${day.date}"><span>${DAY_NAMES[(i + 1) % 7]}</span><b>${o.getDate()}</b></div>`;
+  });
+  // 종일 일정 줄 (그 주에 종일 일정이 하나라도 있을 때만)
+  const anyAllday = weekData.some(d => d.items.some(it => it.kind === "event" && it.allday));
+  let adRow = "";
+  if (anyAllday) {
+    adRow = `<div class="wt-adrow"><div class="wt-adcorner">종일</div>`;
+    weekData.forEach(day => {
+      const ads = day.items.filter(it => it.kind === "event" && it.allday);
+      adRow += `<div class="wt-adcell">` + ads.map(a =>
+        `<div class="wt-adblock" data-id="${a.eventId}" data-date="${a.occurrenceDate}">${esc(a.title)}</div>`).join("") + `</div>`;
+    });
+    adRow += `</div>`;
+  }
+  let axis = "";
+  for (let h = WT_START; h < WT_END; h++) axis += `<div class="wt-hour" style="height:${WT_HOUR}px">${h % 24}</div>`;
+  let cols = "";
+  weekData.forEach(day => {
+    let blocks = "";
+    for (const it of day.items) {
+      if (it.kind !== "event" || it.allday) continue;
+      const s = new Date(it.start), e = new Date(it.end);
+      const top = Math.max(0, wtYof(s));
+      const hgt = Math.max(17, wtYof(e) - top - 2);
+      const cls = ["wt-block", it.recurring ? "rec" : "", e <= now ? "past" : ""].join(" ");
+      blocks += `<div class="${cls}" data-id="${it.eventId}" data-date="${it.occurrenceDate}"
+        data-title="${escapeAttr(it.title)}" data-start="${it.start}" data-end="${it.end}" data-rec="${it.recurring ? 1 : 0}"
+        style="top:${top}px;height:${hgt}px"><span>${esc(it.title)}</span></div>`;
+    }
+    cols += `<div class="wt-col" data-date="${day.date}" style="height:${totalH}px">${blocks}</div>`;
+  });
+  let nowLine = "";
+  if (weekData.some(d => d.date === todayStr)) {
+    const y = wtYof(now);
+    if (y >= 0 && y <= totalH) nowLine = `<div class="wt-now" style="top:${y}px"></div>`;
+  }
+  wtEl.innerHTML = `<div class="wt-head">${head}</div>${adRow}
+    <div class="wt-body"><div class="wt-axis" style="height:${totalH}px">${axis}</div>
+    <div class="wt-cols">${cols}${nowLine}</div></div>`;
+}
+
+// ── 오늘 시간표 (하루 상세) — 큼직한 블록, 06시~다음날 04시 ──
+const DAY_TL_START = 6, DAY_TL_END = 28, DAY_TL_HOUR = 52;
+const dayTlEl = document.getElementById("timeline");
+const dayAlldayEl = document.getElementById("day-allday");
+function renderDayTimeline() {
+  // 종일 일정은 시간표 위 별도 줄에 (있을 때만)
+  const allday = events.filter(e => e.allday);
+  dayAlldayEl.innerHTML = allday.map(e =>
+    `<div class="ad-block" data-id="${e.eventId}" data-date="${e.occurrenceDate}">종일 · ${esc(e.title)}</div>`).join("");
+  dayAlldayEl.style.display = allday.length ? "" : "none";
+
+  const yOf = d => { let h = d.getHours() + d.getMinutes() / 60; if (h < DAY_TL_START) h += 24; return (h - DAY_TL_START) * DAY_TL_HOUR; };
+  let html = "";
+  for (let h = DAY_TL_START; h < DAY_TL_END; h++) html += `<div class="hour-row"><div class="h">${h % 24}시</div></div>`;
+  html += `<div class="blocks">`;
+  for (const e of events) {
+    if (e.allday) continue;
+    const top = Math.max(0, yOf(e.start));
+    const height = Math.max(26, yOf(e.end) - top - 3);
+    const cls = ["block", e.recurring ? "recurring" : "", e.end <= now ? "past" : ""].join(" ");
+    html += `<div class="${cls}" data-id="${e.eventId}" data-date="${e.occurrenceDate}" style="top:${top}px;height:${height}px">
+      <span class="name">${esc(e.title)}</span><span class="t">${fmtTime(e.start)}–${fmtTime(e.end)}</span></div>`;
+  }
+  html += `</div>`;
+  if (viewDate === todayStr) {
+    const y = yOf(now);
+    if (y >= 0 && y <= (DAY_TL_END - DAY_TL_START) * DAY_TL_HOUR) html += `<div class="now-line" style="top:${y}px"></div>`;
+  }
+  dayTlEl.innerHTML = html;
+}
+dayTlEl.addEventListener("click", ev => {
+  const b = ev.target.closest(".block");
+  if (b?.dataset.id) openEventEditor(Number(b.dataset.id), b.dataset.date);
+});
+dayAlldayEl.addEventListener("click", ev => {
+  const b = ev.target.closest(".ad-block");
+  if (b?.dataset.id) openEventEditor(Number(b.dataset.id), b.dataset.date);
+});
+
+// ── 시간표 모드: 오늘 보기 / 일주일 보기 ──
+const wtDayBtn = document.getElementById("wt-day");
+const wtWeekBtn = document.getElementById("wt-week");
+const dayTlWrap = document.getElementById("day-tl-wrap");
+const wtWrap = document.getElementById("wt-wrap");
+let wtMode = localStorage.getItem("wtmode") || "day";
+
+function updateWtTitle() {
+  if (wtMode === "day") {
+    const o = dateObj(viewDate);
+    wtTitle.textContent = viewDate === todayStr ? "오늘 시간표"
+      : `${o.getMonth() + 1}월 ${o.getDate()}일 시간표`;
+  } else {
+    const f = weekData[0].date.split("-"), l = weekData[6].date.split("-");
+    wtTitle.textContent = `${+f[1]}/${+f[2]} ~ ${+l[1]}/${+l[2]} 시간표`;
+  }
+}
+function setWtMode(m) {
+  wtMode = m;
+  localStorage.setItem("wtmode", m);
+  const day = m === "day";
+  dayTlWrap.style.display = day ? "" : "none";
+  wtWrap.style.display = day ? "none" : "";
+  wtDayBtn.classList.toggle("on", day);
+  wtWeekBtn.classList.toggle("on", !day);
+  updateWtTitle();
+}
+wtDayBtn.onclick = () => setWtMode("day");
+wtWeekBtn.onclick = () => setWtMode("week");
+
+function showWtPop(block) {
+  const s = new Date(block.dataset.start), e = new Date(block.dataset.end);
+  const rec = block.dataset.rec === "1";
+  wtPop.innerHTML = `<div class="wp-title">${esc(block.dataset.title)}</div>
+    <div class="wp-item${rec ? " recurring" : ""}"><span class="wp-time">${fmtTime(s)}–${fmtTime(e)}</span>${rec ? "반복 일정" : "단발 일정"}</div>
+    <button class="wt-edit" type="button">수정 / 삭제</button>`;
+  const wrap = wtEl.parentElement, br = block.getBoundingClientRect(), wr = wrap.getBoundingClientRect();
+  wtPop.style.left = Math.min(Math.max(br.left - wr.left - 20, 6), Math.max(6, wrap.clientWidth - 190)) + "px";
+  wtPop.style.top = Math.max(br.top - wr.top - 4, 4) + "px";
+  wtPop.hidden = false;
+  wtPop.querySelector(".wt-edit").onclick = ev => {
+    ev.stopPropagation(); wtPop.hidden = true;
+    openEventEditor(Number(block.dataset.id), block.dataset.date);
+  };
+}
+
+function renderAll() {
+  renderDateNav();
+  renderHero();
+  renderEvents();
+  renderTasks();
+  renderDayTimeline();
+  renderTimeline();
+  updateWtTitle();
+  renderWeekStrip();
+}
+
+// ── 위임 핸들러 (한 번만 붙임; innerHTML이 바뀌어도 유지됨) ──
+eventsEl.addEventListener("click", ev => {
   const row = ev.target.closest(".event");
   if (row?.dataset.id) openEventEditor(Number(row.dataset.id), row.dataset.date);
 });
-
-// 할 일
-const startOfToday = new Date(logicalToday);
-const endOfToday = new Date(startOfToday); endOfToday.setDate(endOfToday.getDate() + 1);
-const tasksEl = document.getElementById("tasks");
-tasksEl.innerHTML = tasks.map(t => {
-  const overdue = !t.done && t.due && t.due < startOfToday;
-  const cls = ["task", t.done ? "done" : "", overdue ? "overdue" : ""].join(" ");
-  let due = "";
-  if (overdue) {
-    const days = Math.ceil((startOfToday - t.due) / 86400000);
-    due = `${days}일 지남`;
-  } else if (t.due && !t.done) {
-    due = t.due < endOfToday ? "오늘까지" : `${t.due.getMonth() + 1}/${t.due.getDate()}까지`;
-  }
-  return `
-    <div class="${cls}" data-id="${t.id}" data-done="${t.done ? 1 : 0}">
-      <div class="box">${t.done ? "✓" : ""}</div>
-      <div class="name">${t.title}</div>
-      ${due ? `<div class="due">${due}</div>` : ""}
-    </div>`;
-}).join("");
-
-// 원본 할 일(마감일 문자열 포함) 조회용 — 수정 모달에 씀
-const taskById = new Map(data.tasks.map(t => [t.id, t]));
-
-// 체크박스 터치 = 완료 토글 / 그 외 터치 = 수정·삭제 모달
-tasksEl.addEventListener("click", async (ev) => {
+tasksEl.addEventListener("click", async ev => {
   const row = ev.target.closest(".task");
   if (!row) return;
   const id = Number(row.dataset.id);
   if (ev.target.closest(".box")) {
     await apiFetch(`/api/tasks/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      method: "PATCH", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ done: row.dataset.done !== "1" }),
     });
-    location.reload();
+    loadDay(viewDate);
   } else {
     openTaskEditor(taskById.get(id));
   }
 });
-
-// 타임라인(블록) 뷰 — 오전 6시부터 다음날 오전 4시까지
-const DAY_START = 6, DAY_END = 28, HOUR_PX = 52;
-const timelineEl = document.getElementById("timeline");
-let tlHtml = "";
-for (let h = DAY_START; h < DAY_END; h++) {
-  tlHtml += `<div class="hour-row"><div class="h">${h % 24}시</div></div>`;
-}
-tlHtml += `<div class="blocks">`;
-const yOf = d => {
-  let hours = d.getHours() + d.getMinutes() / 60;
-  if (hours < DAY_START) hours += 24; // 자정~새벽 4시는 전날 밤으로 취급
-  return (hours - DAY_START) * HOUR_PX;
-};
-for (const e of events) {
-  const top = Math.max(0, yOf(e.start));
-  const height = Math.max(26, yOf(e.end) - top - 3);
-  const cls = ["block", e.recurring ? "recurring" : "", e.end <= now ? "past" : ""].join(" ");
-  tlHtml += `
-    <div class="${cls}" data-id="${e.eventId}" data-date="${e.occurrenceDate}" style="top:${top}px;height:${height}px">
-      <span class="name">${e.title}</span>
-      <span class="t">${fmtTime(e.start)}–${fmtTime(e.end)}</span>
-    </div>`;
-}
-tlHtml += `</div>`;
-const nowY = yOf(now);
-if (nowY >= 0 && nowY <= (DAY_END - DAY_START) * HOUR_PX) {
-  tlHtml += `<div class="now-line" style="top:${nowY}px"></div>`;
-}
-timelineEl.innerHTML = tlHtml;
-
-// 블록 터치 → 수정/삭제 모달
-timelineEl.addEventListener("click", (ev) => {
-  const b = ev.target.closest(".block");
-  if (b?.dataset.id) openEventEditor(Number(b.dataset.id), b.dataset.date);
+wtEl.addEventListener("click", ev => {
+  const b = ev.target.closest(".wt-block");
+  const ad = ev.target.closest(".wt-adblock");
+  const dl = ev.target.closest(".wt-daylabel");
+  if (ad) { ev.stopPropagation(); wtPop.hidden = true; openEventEditor(Number(ad.dataset.id), ad.dataset.date); }
+  else if (b) { ev.stopPropagation(); showWtPop(b); }
+  else if (dl) { ev.stopPropagation(); wtPop.hidden = true; loadDay(dl.dataset.date); }
 });
+wtEl.addEventListener("mouseover", ev => { const b = ev.target.closest(".wt-block"); if (b) showWtPop(b); });
+document.addEventListener("click", () => { wtPop.hidden = true; });
+
+// 날짜 이동
+document.getElementById("day-prev").onclick = () => loadDay(shiftStr(viewDate, -1));
+document.getElementById("day-next").onclick = () => loadDay(shiftStr(viewDate, 1));
+todayBtn.onclick = () => loadDay(todayStr);
 
 // 뷰 전환
 const btnList = document.getElementById("btn-list");
@@ -833,96 +1231,60 @@ function showView(name) {
 }
 btnList.onclick = () => showView("list");
 btnBlocks.onclick = () => showView("blocks");
-showView(localStorage.getItem("view") || "list");
 
-// 이번 주 점 — 일정은 채운 점, 할 일은 테두리 점. 완료한 할 일은 점에서 빠진다.
-// 화살표로 저번 주/다음 주 이동 가능.
+// ── 이번 주 점(목록 모드 하단): 날짜 탭 = 그날로 이동, 호버 = 미리보기 ──
 const weekEl = document.getElementById("week");
 const weekTitleEl = document.getElementById("week-title");
-const todayDow = (logicalToday.getDay() + 6) % 7; // 월=0 … 일=6
-let weekOffset = 0;       // 0=이번 주, -1=저번 주, 1=다음 주 …
-let weekData = weekCounts;
-
-function renderWeek() {
-  weekEl.innerHTML = weekData.map((day, i) => {
-    const isToday = weekOffset === 0 && i === todayDow;
-    const isPast = weekOffset < 0 || (weekOffset === 0 && i < todayDow);
-    const cls = ["day", isToday ? "today" : "", isPast ? "past-day" : ""].join(" ");
-    const dots = day.items.slice(0, 5)
-      .map(it => {
-        const mod = it.kind === "task" ? " todo" : (it.recurring ? " rec" : "");
-        return `<span class="dot${mod}"></span>`;
-      })
-      .join("");
-    return `
-      <div class="${cls}" data-i="${i}">
-        <div class="dots">${dots}</div>
-        <div class="label">${DAY_NAMES[(i + 1) % 7]}</div>
-      </div>`;
-  }).join("");
-  if (weekOffset === 0) weekTitleEl.textContent = "이번 주";
-  else if (weekOffset === -1) weekTitleEl.textContent = "저번 주";
-  else if (weekOffset === 1) weekTitleEl.textContent = "다음 주";
-  else {
-    const [, wm, wd] = weekData[0].date.split("-").map(Number);
-    weekTitleEl.textContent = `${wm}/${wd}~ 주`;
-  }
-  bindDayHandlers();
-}
-
-async function moveWeek(delta) {
-  weekOffset += delta;
-  closePop();
-  const monday = new Date(logicalToday);
-  monday.setDate(monday.getDate() - todayDow + weekOffset * 7);
-  const ds = `${monday.getFullYear()}-${pad(monday.getMonth() + 1)}-${pad(monday.getDate())}`;
-  weekData = (await (await apiFetch(`/api/week?date=${ds}`)).json()).week;
-  renderWeek();
-}
-document.getElementById("wk-prev").addEventListener("click", ev => { ev.stopPropagation(); moveWeek(-1); });
-document.getElementById("wk-next").addEventListener("click", ev => { ev.stopPropagation(); moveWeek(1); });
-
-// 요일 팝업 — 터치하면 열리고(다시 터치나 바깥 터치로 닫힘), 마우스 호버로도 열린다
 const popEl = document.getElementById("week-pop");
-let popIndex = null;   // 현재 열린 요일, null이면 닫힘
-let popPinned = false; // 터치로 열었는지 (호버 이탈로 안 닫히게)
 
-function openPop(i, pinned) {
-  const day = weekData[i];
-  const [, pm, pd] = day.date.split("-").map(Number);
-  const title = `${pm}월 ${pd}일 ${DAY_NAMES[(i + 1) % 7]}요일`;
-  const items = day.items.map(it => {
-    if (it.kind === "task") {
-      return `<div class="wp-item"><span class="wp-time">할 일</span>${it.title}</div>`;
-    }
-    const t = new Date(it.start);
-    return `<div class="wp-item${it.recurring ? " recurring" : ""}">
-      <span class="wp-time">${fmtTime(t)}</span>${it.title}</div>`;
+function renderWeekStrip() {
+  weekEl.innerHTML = weekData.map((day, i) => {
+    const o = dateObj(day.date);
+    const cls = ["day",
+      day.date === viewDate ? "sel" : "",
+      day.date === todayStr ? "today" : "",
+      day.date < todayStr ? "past-day" : ""].join(" ");
+    const dots = day.items.slice(0, 5).map(it => {
+      const mod = it.kind === "task" ? " todo" : (it.recurring ? " rec" : "");
+      return `<span class="dot${mod}"></span>`;
+    }).join("");
+    return `<div class="${cls}" data-i="${i}" data-date="${day.date}">
+      <div class="dots">${dots}</div><div class="label">${DAY_NAMES[(i + 1) % 7]}<br>${o.getDate()}</div></div>`;
   }).join("");
-  popEl.innerHTML = `<div class="wp-title">${title}</div>` +
-    (items || `<div class="wp-empty">일정 없음</div>`);
+  const hasToday = weekData.some(d => d.date === todayStr);
+  const f = weekData[0].date.split("-"), l = weekData[6].date.split("-");
+  weekTitleEl.textContent = hasToday ? "이번 주" : `${+f[1]}/${+f[2]} ~ ${+l[1]}/${+l[2]}`;
+}
+
+function openPop(i) {
+  const day = weekData[i], o = dateObj(day.date);
+  const title = `${o.getMonth() + 1}월 ${o.getDate()}일 ${DAY_NAMES[o.getDay()]}요일`;
+  const items = day.items.map(it => {
+    if (it.kind === "task") return `<div class="wp-item"><span class="wp-time">할 일</span>${esc(it.title)}</div>`;
+    if (it.allday) return `<div class="wp-item"><span class="wp-time">종일</span>${esc(it.title)}</div>`;
+    const t = new Date(it.start);
+    return `<div class="wp-item${it.recurring ? " recurring" : ""}"><span class="wp-time">${fmtTime(t)}</span>${esc(it.title)}</div>`;
+  }).join("");
+  popEl.innerHTML = `<div class="wp-title">${title}</div>` + (items || `<div class="wp-empty">일정 없음</div>`);
   popEl.hidden = false;
-  popIndex = i;
-  popPinned = pinned;
 }
-function closePop() {
-  popEl.hidden = true;
-  popIndex = null;
-  popPinned = false;
-}
-function bindDayHandlers() {
-  weekEl.querySelectorAll(".day").forEach(el => {
-    const i = Number(el.dataset.i);
-    el.addEventListener("click", ev => {
-      ev.stopPropagation();
-      popIndex === i && popPinned ? closePop() : openPop(i, true);
-    });
-    el.addEventListener("mouseenter", () => { if (!popPinned) openPop(i, false); });
-    el.addEventListener("mouseleave", () => { if (!popPinned) closePop(); });
-  });
-}
+function closePop() { popEl.hidden = true; }
+
+weekEl.addEventListener("click", ev => {
+  const el = ev.target.closest(".day");
+  if (el) { ev.stopPropagation(); closePop(); loadDay(el.dataset.date); }
+});
+weekEl.addEventListener("mouseover", ev => {
+  const el = ev.target.closest(".day");
+  if (el) openPop(Number(el.dataset.i));
+});
+weekEl.addEventListener("mouseleave", closePop);
 document.addEventListener("click", closePop);
-renderWeek();
+
+// ── 첫 렌더 ──
+setWtMode(wtMode);
+renderAll();
+showView(localStorage.getItem("view") || "list");
 
 // ───────── 채팅 입력 → 파싱 → 확인 후 등록 ─────────
 const chatForm = document.getElementById("chat-form");
@@ -936,8 +1298,10 @@ function fmtWhen(it) {
   if (it.kind === "task") {
     return it.due ? `${Number(it.due.slice(5, 7))}/${Number(it.due.slice(8, 10))}까지` : "기한 없음";
   }
-  const s = new Date(it.start), e = new Date(it.end);
+  const s = new Date(it.start);
   const day = `${s.getMonth() + 1}/${s.getDate()} (${DAY_NAMES[s.getDay()]})`;
+  if (it.allday) return `${day} 종일`;
+  const e = new Date(it.end);
   return `${day} ${fmtTime(s)}–${fmtTime(e)}`;
 }
 
@@ -985,7 +1349,7 @@ function renderConfirm(items) {
       if (it.kind === "event") {
         await apiFetch("/api/events", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title: it.title, start: it.start, end: it.end, rrule: it.rrule ?? null }),
+          body: JSON.stringify({ title: it.title, start: it.start, end: it.end, rrule: it.rrule ?? null, allday: it.allday ? 1 : 0 }),
         });
       } else if (it.kind === "task") {
         await apiFetch("/api/tasks", {
@@ -994,7 +1358,8 @@ function renderConfirm(items) {
         });
       }
     }
-    location.reload();
+    chatReset();
+    loadDay(viewDate);
   };
 }
 
@@ -1098,22 +1463,26 @@ async function openEventEditor(eventId, occurrenceDate) {
   if (!res.ok) return;
   const ev = await res.json();               // 원본(반복 규칙 포함) 기준으로 수정
   const recurring = !!ev.rrule;
+  const allday = !!ev.allday;
   const sDate = ev.start.slice(0, 10);
   const sTime = ev.start.slice(11, 16);
   const eTime = ev.end.slice(11, 16);
 
   let body = `<div class="sheet-title">일정 수정</div>
     <label class="fld"><span>제목</span><input id="m-title" value="${escapeAttr(ev.title)}"></label>`;
-  if (recurring) {
+  if (allday) {
+    body += `<div class="fld-note">📅 종일 일정</div>
+      <label class="fld"><span>날짜</span><input id="m-date" type="date" value="${sDate}"></label>`;
+  } else if (recurring) {
     body += `<div class="fld-note">🔁 ${fmtRrule(ev.rrule)}</div>`;
   } else {
     body += `<label class="fld"><span>날짜</span><input id="m-date" type="date" value="${sDate}"></label>`;
   }
-  body += `<div class="two">
+  if (!allday) body += `<div class="two">
       <label class="fld"><span>시작</span><input id="m-start" type="time" value="${sTime}"></label>
       <label class="fld"><span>종료</span><input id="m-end" type="time" value="${eTime}"></label>
-    </div>
-    <div class="sheet-btns">
+    </div>`;
+  body += `<div class="sheet-btns">
       <button class="ok" id="m-save">저장</button>
       ${recurring ? `<button class="no" id="m-skip">이 날짜만 빼기</button>` : ""}
       <button class="del" id="m-del">${recurring ? "반복 전체 삭제" : "삭제"}</button>
@@ -1124,28 +1493,37 @@ async function openEventEditor(eventId, occurrenceDate) {
   document.getElementById("m-cancel").onclick = closeSheet;
   document.getElementById("m-save").onclick = async () => {
     const title = document.getElementById("m-title").value.trim();
-    const st = document.getElementById("m-start").value;
-    const et = document.getElementById("m-end").value;
-    if (!title || !st || !et) return;
-    const baseDate = recurring ? sDate : document.getElementById("m-date").value;
-    const endDate = et <= st ? addDayStr(baseDate) : baseDate; // 자정 넘기면 종료는 다음날
+    if (!title) return;
+    let payload;
+    if (allday) {
+      const d = document.getElementById("m-date").value;
+      if (!d) return;
+      payload = { title, start: `${d}T04:00`, end: `${addDayStr(d)}T03:59`, rrule: ev.rrule || null, allday: 1 };
+    } else {
+      const st = document.getElementById("m-start").value;
+      const et = document.getElementById("m-end").value;
+      if (!st || !et) return;
+      const baseDate = recurring ? sDate : document.getElementById("m-date").value;
+      const endDate = et <= st ? addDayStr(baseDate) : baseDate; // 자정 넘기면 종료는 다음날
+      payload = { title, start: `${baseDate}T${st}`, end: `${endDate}T${et}`, rrule: ev.rrule || null, allday: 0 };
+    }
     await apiFetch(`/api/events/${eventId}`, {
       method: "PUT", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, start: `${baseDate}T${st}`, end: `${endDate}T${et}`, rrule: ev.rrule || null }),
+      body: JSON.stringify(payload),
     });
-    location.reload();
+    closeSheet(); loadDay(viewDate);
   };
   if (recurring) document.getElementById("m-skip").onclick = async () => {
     await apiFetch(`/api/events/${eventId}/exceptions`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ date: occurrenceDate, kind: "skip" }),
     });
-    location.reload();
+    closeSheet(); loadDay(viewDate);
   };
   document.getElementById("m-del").onclick = async () => {
     if (!confirm(recurring ? "이 반복 일정을 전부 삭제할까요?" : "이 일정을 삭제할까요?")) return;
     await apiFetch(`/api/events/${eventId}`, { method: "DELETE" });
-    location.reload();
+    closeSheet(); loadDay(viewDate);
   };
 }
 
@@ -1168,12 +1546,12 @@ function openTaskEditor(task) {
       method: "PATCH", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title, due }),
     });
-    location.reload();
+    closeSheet(); loadDay(viewDate);
   };
   document.getElementById("m-del").onclick = async () => {
     if (!confirm("이 할 일을 삭제할까요?")) return;
     await apiFetch(`/api/tasks/${task.id}`, { method: "DELETE" });
-    location.reload();
+    closeSheet(); loadDay(viewDate);
   };
 }
 

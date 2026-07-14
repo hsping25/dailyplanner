@@ -3,10 +3,10 @@
 import { db } from "./db.js";
 import { pad, dateStr, eventsInWindow } from "./day.js";
 import { sendTelegram } from "./telegram.js";
+import { linkedUsers } from "./tglink.js";
 
 const LEAD_MIN = 10;      // 몇 분 전에 알릴지
 const TICK_MS = 30_000;
-const NOTIFY_USER = process.env.NOTIFY_USER || "기본"; // 이 아이디의 일정만 알림
 
 const localIso = d => `${dateStr(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 const hm = s => {
@@ -17,16 +17,20 @@ const hm = s => {
 export async function tick(now = new Date()) {
   const winStart = localIso(now);
   const winEnd = localIso(new Date(now.getTime() + (LEAD_MIN + 1) * 60000));
-  for (const occ of eventsInWindow(winStart, winEnd, NOTIFY_USER)) {
-    const mins = Math.round((new Date(occ.start) - now) / 60000);
-    if (mins < 0 || mins > LEAD_MIN) continue;
-    const key = `${occ.eventId}|${occ.start}`;
-    if (db.prepare("SELECT 1 FROM notified WHERE key = ?").get(key)) continue;
-    db.prepare("INSERT INTO notified (key, sent_at) VALUES (?, ?)").run(key, winStart);
-    try {
-      await sendTelegram(`⏰ ${mins <= 0 ? "지금" : `${mins}분 뒤`} ${hm(occ.start)} ${occ.title}`);
-    } catch (e) {
-      console.error("일정 알림 실패:", e.message);
+  // 연결된 아이디마다 그 사람 일정을 그 사람 chat_id로
+  for (const { user, chat_id } of linkedUsers()) {
+    for (const occ of eventsInWindow(winStart, winEnd, user)) {
+      if (occ.allday) continue; // 종일 일정은 "10분 전" 알림 없음
+      const mins = Math.round((new Date(occ.start) - now) / 60000);
+      if (mins < 0 || mins > LEAD_MIN) continue;
+      const key = `${user}|${occ.eventId}|${occ.start}`;
+      if (db.prepare("SELECT 1 FROM notified WHERE key = ?").get(key)) continue;
+      db.prepare("INSERT INTO notified (key, sent_at) VALUES (?, ?)").run(key, winStart);
+      try {
+        await sendTelegram(`⏰ ${mins <= 0 ? "지금" : `${mins}분 뒤`} ${hm(occ.start)} ${occ.title}`, chat_id);
+      } catch (e) {
+        console.error("일정 알림 실패:", e.message);
+      }
     }
   }
   // 오래된 기록 정리 (일주일 지난 것)
