@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { get, all, run, insert, initDb } from "./db.js";
 import { parseText } from "./parse.js";
-import { pad, todayStr, shiftDate, dayWindow, eventsInWindow } from "./day.js";
+import { pad, todayStr, shiftDate, dayWindow, eventsInWindow, loadEvents, expand } from "./day.js";
 import { startNotifier } from "./notify.js";
 import { startSchedules } from "./schedule.js";
 import { getBotUsername } from "./telegram.js";
@@ -39,31 +39,43 @@ app.get("/api/day", ah(async (req, res) => {
   const date = req.query.date || todayStr();
   const { start, end } = dayWindow(date);
 
-  const events = await eventsInWindow(start, end, user);
+  const loaded = await loadEvents(user);        // 이벤트는 한 번만 로드해 아래에서 재사용
+  const events = expand(loaded, start, end);
   const tasks = await all(
     'SELECT * FROM tasks WHERE "user" = ? AND (done = 0 OR due = ?) ORDER BY due IS NULL, due, id',
     [user, date]);
 
-  res.json({ date, events, tasks, week: await weekFor(date, user) });
+  res.json({ date, events, tasks, week: await weekFor(date, user, loaded) });
 }));
 
 // date가 속한 주(월~일)의 요일별 일정 + 안 끝난 할 일 목록 (점 개수와 팝업에 사용)
-async function weekFor(date, user) {
+// 이벤트는 한 번만 로드해 7일치를 메모리에서 펼치고, 주간 할일도 한 번의 쿼리로.
+async function weekFor(date, user, loaded) {
+  if (!loaded) loaded = await loadEvents(user);
   const [y, m, d] = date.split("-").map(Number);
   const dow = (new Date(y, m - 1, d).getDay() + 6) % 7; // 월=0
   const monday = shiftDate(date, -dow);
+  const sunday = shiftDate(monday, 6);
+
+  const weekTasks = await all(
+    'SELECT title, due FROM tasks WHERE "user" = ? AND done = 0 AND due >= ? AND due <= ?',
+    [user, monday, sunday]);
+  const tasksByDate = new Map();
+  for (const t of weekTasks) {
+    if (!tasksByDate.has(t.due)) tasksByDate.set(t.due, []);
+    tasksByDate.get(t.due).push(t);
+  }
+
   const week = [];
   for (let i = 0; i < 7; i++) {
     const dayDate = shiftDate(monday, i);
     const w = dayWindow(dayDate);
-    const items = (await eventsInWindow(w.start, w.end, user)).map(e => ({
+    const items = expand(loaded, w.start, w.end).map(e => ({
       kind: "event", title: e.title, start: e.start, end: e.end,
       recurring: e.recurring, eventId: e.eventId, occurrenceDate: e.occurrenceDate,
       allday: e.allday,
     }));
-    for (const t of await all('SELECT title FROM tasks WHERE "user" = ? AND done = 0 AND due = ?', [user, dayDate])) {
-      items.push({ kind: "task", title: t.title });
-    }
+    for (const t of tasksByDate.get(dayDate) ?? []) items.push({ kind: "task", title: t.title });
     week.push({ date: dayDate, items });
   }
   return week;

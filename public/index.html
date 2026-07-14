@@ -1186,16 +1186,21 @@ eventsEl.addEventListener("click", ev => {
   const row = ev.target.closest(".event");
   if (row?.dataset.id) openEventEditor(Number(row.dataset.id), row.dataset.date);
 });
-tasksEl.addEventListener("click", async ev => {
+tasksEl.addEventListener("click", ev => {
   const row = ev.target.closest(".task");
   if (!row) return;
   const id = Number(row.dataset.id);
   if (ev.target.closest(".box")) {
-    await apiFetch(`/api/tasks/${id}`, {
+    // 낙관적 업데이트: 화면 즉시 반영하고 서버는 백그라운드로 (렉 체감 제거)
+    const willDone = row.dataset.done !== "1";
+    row.dataset.done = willDone ? "1" : "0";
+    row.classList.toggle("done", willDone);
+    const box = row.querySelector(".box");
+    if (box) box.textContent = willDone ? "✓" : "";
+    apiFetch(`/api/tasks/${id}`, {
       method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ done: row.dataset.done !== "1" }),
-    });
-    loadDay(viewDate);
+      body: JSON.stringify({ done: willDone }),
+    }).catch(() => {});
   } else {
     openTaskEditor(taskById.get(id));
   }

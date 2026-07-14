@@ -7,7 +7,14 @@ const DAY = ["일", "월", "화", "수", "목", "금", "토"];
 const WEEKDAY = { 월: "MO", 화: "TU", 수: "WE", 목: "TH", 금: "FR", 토: "SA", 일: "SU" };
 
 const fmtDate = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-const midnight = now => new Date(now.getFullYear(), now.getMonth(), now.getDate());
+// 하루 경계는 새벽 4시. "오늘/내일" 등 상대 날짜는 벽시계가 아니라 이 논리적 하루 기준.
+// 예: 7/15 새벽 1시는 아직 논리적 7/14 → "내일"은 7/15.
+const DAY_BOUNDARY = 4;
+const midnight = now => {
+  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  if (now.getHours() < DAY_BOUNDARY) d.setDate(d.getDate() - 1);
+  return d;
+};
 
 const DUR_RE = /(?:(\d+)\s*시간\s*(반)?|(\d+)\s*분)\s*동안/;
 
@@ -70,14 +77,15 @@ function parseDate(text, now) {
   // (다음주|담주|이번주|저번주|지난주)? + 요일
   if (m = text.match(/(다음\s*주|담주|이번\s*주|저번\s*주|지난\s*주)?\s*([월화수목금토일])\s*요일/)) {
     const target = DAY.indexOf(m[2]);
+    const d = midnight(now);          // 논리적 오늘
+    const logDow = d.getDay();
     const mb = x => (x + 6) % 7;
-    const diff = mb(target) - mb(now.getDay());
-    const d = midnight(now);
+    const diff = mb(target) - mb(logDow);
     const mod = m[1] || "";
     if (/다음|담/.test(mod)) d.setDate(d.getDate() + diff + 7);
     else if (/이번/.test(mod)) d.setDate(d.getDate() + diff);
     else if (/저번|지난/.test(mod)) d.setDate(d.getDate() + diff - 7);
-    else { let dd = (target - now.getDay() + 7) % 7; if (dd === 0) dd = 7; d.setDate(d.getDate() + dd); }
+    else { let dd = (target - logDow + 7) % 7; if (dd === 0) dd = 7; d.setDate(d.getDate() + dd); }
     return { date: d, span: m[0] };
   }
   // 바로 "N일" (이달 그 날짜; 지났으면 다음달)
@@ -287,8 +295,7 @@ function parseAll(text, now) {
  * 문장(과 되묻기 대화 내역)을 일정/할 일/질문/재입력요청 배열로 파싱한다.
  * history: [{role:"user"|"assistant", text}] — 오전/오후 되묻기 흐름 유지용.
  */
-export async function parseText(text, history = []) {
-  const now = new Date();
+export async function parseText(text, history = [], now = new Date()) {
   if (history.length > 0) {
     // 되물음에 시간대만 답한 경우 → 원래 문장의 "N시" 앞에 그 시간대를 끼워 재해석
     const m = text.trim().match(/^(오전|오후|아침|점심|저녁|밤|새벽|낮)(?:이요|요|입니다|input)?[.!]?$/);

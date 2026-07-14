@@ -26,7 +26,8 @@ export function dayWindow(date) {
   };
 }
 
-export async function eventsInWindow(start, end, user = "기본") {
+// 사용자의 이벤트 + 예외를 한 번에 로드 (여러 날짜 창을 그릴 때 재사용해 DB 조회 절약)
+export async function loadEvents(user = "기본") {
   const events = await all('SELECT * FROM events WHERE "user" = ?', [user]);
   const exceptions = await all("SELECT * FROM event_exceptions", []);
   const byEvent = new Map();
@@ -34,10 +35,19 @@ export async function eventsInWindow(start, end, user = "기본") {
     if (!byEvent.has(x.event_id)) byEvent.set(x.event_id, []);
     byEvent.get(x.event_id).push(x);
   }
+  return { events, byEvent };
+}
+
+// 로드된 이벤트를 특정 시간창으로 펼친다 (순수 계산, DB 접근 없음)
+export function expand(loaded, start, end) {
   const out = [];
-  for (const e of events) {
-    out.push(...expandEvent(e, start, end, byEvent.get(e.id) ?? []));
+  for (const e of loaded.events) {
+    out.push(...expandEvent(e, start, end, loaded.byEvent.get(e.id) ?? []));
   }
   out.sort((a, b) => a.start.localeCompare(b.start));
   return out;
+}
+
+export async function eventsInWindow(start, end, user = "기본") {
+  return expand(await loadEvents(user), start, end);
 }
