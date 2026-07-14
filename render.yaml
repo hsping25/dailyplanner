@@ -3,23 +3,17 @@ services:
   - type: web
     name: daily-planner
     runtime: node
-    plan: free                 # 무료 티어 (주의: 디스크 없음 → 재배포/재시작 시 SQLite 초기화)
+    plan: free                 # 무료 티어. 데이터는 무료 Postgres(Neon)에 저장하므로 재배포에도 유지됨.
     buildCommand: npm install
     startCommand: npm start
     healthCheckPath: /healthz
     envVars:
       - key: TZ                 # 날짜/알림 시각 계산 기준 (필수)
         value: Asia/Seoul
-      - key: NOTIFY_USER        # 알림 대상 아이디
+      - key: NOTIFY_USER        # 레거시 단일 알림 대상 (멀티 사용자는 앱의 🔔로 연결)
         value: 기본
-      - key: TELEGRAM_BOT_TOKEN # 대시보드에서 직접 입력 (커밋 금지)
+      - key: DATABASE_URL       # Neon Postgres 연결 문자열 (대시보드에서 직접 입력)
+        sync: false             # 없으면 로컬 SQLite로 동작(개발용). 배포엔 반드시 넣기.
+      - key: TELEGRAM_BOT_TOKEN # 봇 토큰 (대시보드에서 직접 입력, 커밋 금지)
         sync: false
-      - key: TELEGRAM_CHAT_ID
-        sync: false
-
-    # ── 데이터를 계속 보존하려면(유료) 아래 주석을 풀고 위 plan을 starter 이상으로 ──
-    # disk:
-    #   name: planner-data
-    #   mountPath: /data
-    #   sizeGB: 1
-    # 그리고 환경변수 DB_PATH=/data/planner.db 추가
+      # TELEGRAM_CHAT_ID 는 선택 — 넣으면 '기본' 아이디에 자동 연결(레거시). 보통은 앱 🔔로 연결.

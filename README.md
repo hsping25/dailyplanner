@@ -35,11 +35,14 @@ TZ=Asia/Seoul         # (클라우드에서 필수) 날짜/알림 시각 기준
 3. 환경변수에 `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` 입력. `TZ=Asia/Seoul`, `NOTIFY_USER`는 blueprint에 이미 있음.
 4. 배포되면 나오는 `https://...onrender.com` 주소를 폰에서 열고 홈 화면에 추가.
 
-### ⚠️ 무료 티어의 데이터 보존 한계
-Render 무료 웹 서비스는 디스크가 없어서 **재배포·재시작 때마다 SQLite(`planner.db`)가 초기화**된다.
-데이터를 계속 보존하려면:
-- 유료 인스턴스 + 영구 디스크: `render.yaml`의 `disk` 주석을 풀고 `DB_PATH=/data/planner.db` 추가, 또는
-- 외부 DB(Postgres 등)로 전환 (코드 수정 필요).
+### 데이터 영구 보존 — 무료 Postgres(Neon)
+Render 무료 웹은 디스크가 없어 SQLite 파일이 재배포 때 사라진다. 대신 **무료 Postgres(Neon)**를 쓰면 영구 보존된다.
+1. [neon.tech](https://neon.tech) 가입 → 프로젝트 생성 (무료)
+2. 대시보드에서 **Connection string**(`postgresql://...`) 복사
+3. Render 환경변수에 **`DATABASE_URL`** = 그 문자열 추가
+4. 재배포. 앱은 `DATABASE_URL`이 있으면 자동으로 Postgres를 쓴다(없으면 로컬 SQLite).
+
+로컬 개발은 그대로 SQLite로 돌아가므로 Neon 없이도 `npm run dev` 가능.
 
 ## UptimeRobot으로 깨어 있게 하기
 무료 티어는 15분간 요청이 없으면 잠든다(다음 접속이 느려지고, 그동안 10분 전 알림도 멈춤).

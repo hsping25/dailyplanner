@@ -1,5 +1,5 @@
 // "하루" 계산 공용 로직 — 서버와 브리핑 스크립트가 함께 쓴다.
-import { db } from "./db.js";
+import { all } from "./db.js";
 import { expandEvent } from "./recur.js";
 
 export const pad = n => String(n).padStart(2, "0");
@@ -26,9 +26,9 @@ export function dayWindow(date) {
   };
 }
 
-export function eventsInWindow(start, end, user = "기본") {
-  const events = db.prepare("SELECT * FROM events WHERE user = ?").all(user);
-  const exceptions = db.prepare("SELECT * FROM event_exceptions").all();
+export async function eventsInWindow(start, end, user = "기본") {
+  const events = await all('SELECT * FROM events WHERE "user" = ?', [user]);
+  const exceptions = await all("SELECT * FROM event_exceptions", []);
   const byEvent = new Map();
   for (const x of exceptions) {
     if (!byEvent.has(x.event_id)) byEvent.set(x.event_id, []);

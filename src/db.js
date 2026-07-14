@@ -1,68 +1,76 @@
-import { DatabaseSync } from "node:sqlite";
+// 저장 계층. DATABASE_URL이 있으면 Postgres, 없으면 로컬 SQLite 파일.
+// 두 경우 모두 아래 async 헬퍼(get/all/run/insert)로 통일해서 나머지 코드는 동일하게 쓴다.
+// 예약어인 "user", "end" 컬럼은 두 DB 모두에서 통하도록 항상 큰따옴표로 감싼다.
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
-// 기본은 프로젝트 폴더의 planner.db. 클라우드에서 영구 디스크를 쓰면 DB_PATH로 그 경로 지정.
-const dbPath = process.env.DB_PATH
-  || path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "planner.db");
-export const db = new DatabaseSync(dbPath);
+const usePg = !!process.env.DATABASE_URL;
+let sqlite = null, pgPool = null;
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS events (
-    id      INTEGER PRIMARY KEY AUTOINCREMENT,
-    user    TEXT NOT NULL DEFAULT '기본',  -- 아이디별 분리
-    title   TEXT NOT NULL,
-    start   TEXT NOT NULL,            -- 로컬 시각 "YYYY-MM-DDTHH:MM"
-    end     TEXT NOT NULL,
-    rrule   TEXT,                     -- 반복이면 RRULE 문자열, 단발이면 NULL
-    allday  INTEGER NOT NULL DEFAULT 0 -- 종일 일정이면 1 (start/end는 논리적 하루 04:00~다음날 03:59)
-  );
-
-  -- 반복 일정의 예외: 특정 날짜만 건너뛰거나(skip) 내용을 바꾼다(override)
-  CREATE TABLE IF NOT EXISTS event_exceptions (
-    id        INTEGER PRIMARY KEY AUTOINCREMENT,
-    event_id  INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
-    date      TEXT NOT NULL,          -- 해당 회차의 날짜 "YYYY-MM-DD"
-    kind      TEXT NOT NULL CHECK (kind IN ('skip', 'override')),
-    title     TEXT,
-    start     TEXT,
-    end       TEXT,
-    UNIQUE (event_id, date)
-  );
-
-  -- 10분 전 알림을 이미 보낸 회차 기록 (재시작해도 중복 전송 방지)
-  CREATE TABLE IF NOT EXISTS notified (
-    key      TEXT PRIMARY KEY,   -- "eventId|회차 start"
-    sent_at  TEXT NOT NULL
-  );
-
-  -- 아이디 ↔ 텔레그램 chat_id 연결. code는 연결 대기중인 1회용 코드.
-  CREATE TABLE IF NOT EXISTS tg_link (
-    user     TEXT PRIMARY KEY,
-    chat_id  TEXT,
-    code     TEXT
-  );
-
-  -- 잡다한 키-값 (getUpdates offset 등)
-  CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT);
-
-  CREATE TABLE IF NOT EXISTS tasks (
-    id      INTEGER PRIMARY KEY AUTOINCREMENT,
-    user    TEXT NOT NULL DEFAULT '기본',  -- 아이디별 분리
-    title   TEXT NOT NULL,
-    due     TEXT,                     -- "YYYY-MM-DD", 없으면 NULL
-    done    INTEGER NOT NULL DEFAULT 0
-  );
-`);
-
-// 이미 만들어진 DB(구버전) 마이그레이션.
-for (const table of ["events", "tasks"]) {
-  const cols = db.prepare(`PRAGMA table_info(${table})`).all();
-  if (!cols.some(c => c.name === "user")) {
-    db.exec(`ALTER TABLE ${table} ADD COLUMN user TEXT NOT NULL DEFAULT '기본'`);
-  }
+if (usePg) {
+  const pg = (await import("pg")).default;
+  pgPool = new pg.Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false }, // Neon 등 관리형 Postgres
+  });
+} else {
+  const { DatabaseSync } = await import("node:sqlite");
+  const dbPath = process.env.DB_PATH
+    || path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "planner.db");
+  sqlite = new DatabaseSync(dbPath);
 }
-const evCols = db.prepare(`PRAGMA table_info(events)`).all();
-if (!evCols.some(c => c.name === "allday")) {
-  db.exec(`ALTER TABLE events ADD COLUMN allday INTEGER NOT NULL DEFAULT 0`);
+
+// "?" 자리표시자를 Postgres의 $1,$2… 로 변환
+function toPg(sql) { let i = 0; return sql.replace(/\?/g, () => `$${++i}`); }
+
+export async function get(sql, params = []) {
+  if (usePg) return (await pgPool.query(toPg(sql), params)).rows[0];
+  return sqlite.prepare(sql).get(...params);
+}
+export async function all(sql, params = []) {
+  if (usePg) return (await pgPool.query(toPg(sql), params)).rows;
+  return sqlite.prepare(sql).all(...params);
+}
+export async function run(sql, params = []) {
+  if (usePg) return { changes: (await pgPool.query(toPg(sql), params)).rowCount };
+  return { changes: Number(sqlite.prepare(sql).run(...params).changes) };
+}
+// INSERT 후 새 id가 필요할 때
+export async function insert(sql, params = []) {
+  if (usePg) return Number((await pgPool.query(toPg(sql) + " RETURNING id", params)).rows[0].id);
+  return Number(sqlite.prepare(sql).run(...params).lastInsertRowid);
+}
+
+// 스키마 생성 (두 DB 공통; id 자동증가만 방언이 다름)
+export async function initDb() {
+  const AUTO = usePg ? "SERIAL PRIMARY KEY" : "INTEGER PRIMARY KEY AUTOINCREMENT";
+  await run(`CREATE TABLE IF NOT EXISTS events (
+    id ${AUTO},
+    "user" TEXT NOT NULL DEFAULT '기본',
+    title TEXT NOT NULL,
+    start TEXT NOT NULL,
+    "end" TEXT NOT NULL,
+    rrule TEXT,
+    allday INTEGER NOT NULL DEFAULT 0
+  )`);
+  await run(`CREATE TABLE IF NOT EXISTS event_exceptions (
+    id ${AUTO},
+    event_id INTEGER NOT NULL,
+    date TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    title TEXT,
+    start TEXT,
+    "end" TEXT,
+    UNIQUE (event_id, date)
+  )`);
+  await run(`CREATE TABLE IF NOT EXISTS notified (key TEXT PRIMARY KEY, sent_at TEXT NOT NULL)`);
+  await run(`CREATE TABLE IF NOT EXISTS tg_link ("user" TEXT PRIMARY KEY, chat_id TEXT, code TEXT)`);
+  await run(`CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT)`);
+  await run(`CREATE TABLE IF NOT EXISTS tasks (
+    id ${AUTO},
+    "user" TEXT NOT NULL DEFAULT '기본',
+    title TEXT NOT NULL,
+    due TEXT,
+    done INTEGER NOT NULL DEFAULT 0
+  )`);
 }

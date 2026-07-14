@@ -24,7 +24,8 @@
 
 ## 기술 스택
 - Node.js 백엔드 + 단일 HTML 페이지 프론트엔드
-- 저장: SQLite 파일 하나
+- 저장: **DATABASE_URL 있으면 Postgres(Neon), 없으면 로컬 SQLite 파일**. src/db.js가 async get/all/run/insert로 두 방언을 통일. 예약어 컬럼("user","end")은 항상 큰따옴표. id는 SERIAL(pg)/AUTOINCREMENT(sqlite). 스키마는 initDb()가 생성.
+- DB 접근은 모두 async. 라우트는 ah() 래퍼로 감싸 에러를 500으로.
 - 파싱: 정규식 전용 (src/parse.js), 외부 API 없음
 
 ## 아이디(멀티 유저)
@@ -72,7 +73,7 @@
 - 실행: `npm start`(=node src/server.js, 프로덕션). 로컬 개발은 `npm run dev`(nodemon). Node 24 필수(node:sqlite). `.node-version`=24, engines 지정.
 - 알림 3종 모두 서버 안에서 동작: 10분 전(src/notify.js 30초 루프) + 07:00 브리핑/14:00 할 일(src/schedule.js, node-cron, KST). Windows 작업 스케줄러는 더 이상 불필요(로컬용 잔재는 지워도 됨).
 - **시간대**: 날짜 로직이 서버 로컬시간=KST 가정. 클라우드(UTC)에선 **env TZ=Asia/Seoul 필수**. 아니면 '오늘' 계산이 9시간 어긋남. 서버 시작 시 offset≠540이면 경고 로그.
-- **SQLite 영속성**: DB 경로는 env DB_PATH로 지정 가능(기본 프로젝트폴더/planner.db). Render 무료 티어는 디스크 없음 → 재배포/재시작 시 초기화. 보존하려면 유료+영구디스크(/data) 또는 외부 DB.
-- planner.db와 .env는 .gitignore → 깃/Render엔 안 올라감 → 새 배포는 빈 DB로 시작(모든 아이디 빈 화면).
+- **영속성**: 배포는 Neon Postgres(무료·영구). Render 환경변수 DATABASE_URL에 Neon 연결 문자열 넣으면 자동으로 Postgres 사용. 안 넣으면 SQLite(로컬/휘발). DB_PATH는 SQLite 파일 경로용(로컬).
+- planner.db와 .env는 .gitignore → 깃/Render엔 안 올라감. Postgres는 최초 배포 때 빈 스키마로 시작.
 - render.yaml = Render Blueprint(원클릭). /healthz = UptimeRobot용 헬스체크(5분 간격 핑 → 무료 티어 잠들기 방지).
 - PWA 설치와 SW는 HTTPS에서만 동작(Render는 https 제공).
