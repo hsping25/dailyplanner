@@ -1,0 +1,67 @@
+# Daily Planner (개인용)
+
+한국어 문장으로 일정을 등록하고, 오늘 할 일을 한눈에 보는 개인용 웹앱.
+사용자 1명, 주 사용 기기: 삼성 폰 (세로, 좁은 화면).
+
+## 왜 만드는가
+구글 캘린더의 두 가지 문제를 해결하는 것이 이 앱의 전부다:
+1. 한국어 자연어 입력이 제대로 안 된다 — "2시 30분 독서실"을 새벽 1시에 넣는다.
+2. 정보가 빽빽해서 오늘 뭘 해야 하는지 한눈에 안 들어온다.
+
+## 원칙 (항상 지킬 것)
+- **구글 캘린더 연동은 하지 않는다.** OAuth 없음. 데이터는 SQLite에 직접 저장.
+- **한눈에 들어오는 게 최우선.** 기능을 늘리기보다 화면에서 덜어내는 쪽을 택한다.
+- **폰 화면(세로, 좁은 폭) 기준 디자인.** 글씨는 크게, 버튼은 손가락으로 누르기 편하게.
+- **색 팔레트 고정:** 파랑(--accent)=단발 일정, 청록(--accent2)=반복 일정, 빨강(--warn)=지난 할 일. 이 셋 외의 색은 추가하지 않는다.
+- **API 키는 서버 환경변수(.env)로.** 코드에 하드코딩 금지. `.env`는 `.gitignore`에 포함.
+- 반복 일정은 날짜마다 복사해 저장하지 않는다. RRULE 문자열 하나만 저장하고 화면에 그릴 때 펼친다(`rrule` 라이브러리 사용). 예외(건너뛰기/수정)는 별도 목록으로 관리.
+- 문장 파싱은 **정규식 전용**(`parseText(text, history)`, src/parse.js). LLM/API 키 사용 안 함. 못 알아들으면 `{kind:"unparsed"}` → 프론트가 "다시 말해 주세요" 안내.
+- 파싱 규칙: "~동안"은 기간(end = start + 기간), "~까지"는 항상 할 일(task)의 마감. 반복은 매일/평일/주말/매주·격주 요일/매달 N일 지원. 여러 개는 "그리고" 또는 줄바꿈으로 구분. 시각 애매하면(1~12시, 단서 없음) 오전/오후 되묻기.
+
+## 기술 스택
+- Node.js 백엔드 + 단일 HTML 페이지 프론트엔드
+- 저장: SQLite 파일 하나
+- 파싱: 정규식 전용 (src/parse.js), 외부 API 없음
+
+## 아이디(멀티 유저)
+- events/tasks에 `user` 칸(기본값 '기본'). 모든 API가 요청 아이디로 범위 제한.
+- 아이디는 클라이언트가 localStorage('planner_user')에 저장, 모든 fetch에 `X-User` 헤더로 전송.
+  헤더는 ASCII만 되므로 encodeURIComponent로 감싸 보내고 서버(userOf)가 decodeURIComponent로 복원.
+- 비밀번호 없음 = 인증이 아니라 "칸막이". 주소+아이디 알면 접근 가능. 필요 시 비번 추가.
+- 알림 스크립트는 .env의 NOTIFY_USER(기본 '기본')의 일정만 대상.
+- 로그인 화면: 아이디 없으면 표시. 헤더의 @아이디 터치 → 다른 아이디로 전환.
+
+## 데이터 모델
+- event: user, 제목, 시작/종료 시각, RRULE 문자열(반복일 때), 예외 목록 별도(event_exceptions: skip/override)
+- task: user, 제목, 마감일(선택), 완료 여부
+- 시각은 로컬 시각 문자열 "YYYY-MM-DDTHH:MM"로 저장 (KST 고정)
+- **하루의 경계는 오전 4시.** "오늘" = [오늘 04:00, 내일 04:00). 시간표 뷰는 06시~다음날 04시 표시.
+- RRULE 펼치기는 fake-UTC 기법 사용 (src/recur.js 주석 참고)
+
+## 화면 구성 (읽기 화면)
+- 맨 위: 다음 일정 하나를 크게 ("2시간 뒤 — 헬스")
+- 오늘 일정 시간순, 큼직하게 — 반복 일정은 흐리게, 단발 일정은 진하게
+- 오늘 할 일 체크리스트 — 지난 할 일은 눈에 띄게
+- 맨 아래: 이번 주는 요일별 점 개수만 (상세 없음)
+
+## 진행 단계
+1. ✅ 읽기 화면 (가짜 데이터) — public/index.html
+2. ✅ SQLite 저장소 + CRUD API — src/server.js (Node 내장 node:sqlite 사용, 실행: npm start, 시드: npm run seed)
+3. ✅ 자연어 파싱 — src/parse.js (정규식 전용, LLM 없음, POST /api/parse). 반복·복수·되묻기 지원.
+4. ✅ 입력창 + 등록 전 확인 + 겹침 경고 (GET /api/conflicts, 경고만 하고 막지 않음, 반복 새 일정은 첫 회차만 확인).
+   일정/할 일 수정·삭제: 항목 터치 → 바텀시트 모달 (GET /api/events/:id + PUT/DELETE, tasks PATCH/DELETE). 반복은 "이 날짜만 빼기(skip)" / "반복 전체 삭제".
+5. ✅ 아침 브리핑 — src/briefing.js (npm run brief). Windows 작업 스케줄러 "DailyPlannerBriefing"이 매일 07:00 실행. .env에 TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID 필요 (아직 미설정)
+   - 알림 체계: 할 일은 마감 당일 07:00(브리핑 포함) + 14:00(src/remind-tasks.js, 스케줄러 "DailyPlannerTasks2pm", 남은 것 없으면 안 보냄).
+     일정은 시작 10분 전(src/notify.js, 서버에 내장된 30초 감시 루프, notified 테이블로 중복 방지). 텔레그램 전송은 src/telegram.js 공용.
+6. ✅ PWA — public/manifest.json, public/sw.js, public/icons/ (아이콘 생성기: scripts/gen-icons.mjs).
+   index.html에 manifest 링크 + theme-color(라이트/다크) + apple-touch-icon + SW 등록.
+   SW는 /api/* 는 캐시하지 않음(항상 최신). 배포는 아래 "배포" 절 참고.
+
+## 배포 (Render + UptimeRobot) — README.md에 사용자용 안내 있음
+- 실행: `npm start`(=node src/server.js, 프로덕션). 로컬 개발은 `npm run dev`(nodemon). Node 24 필수(node:sqlite). `.node-version`=24, engines 지정.
+- 알림 3종 모두 서버 안에서 동작: 10분 전(src/notify.js 30초 루프) + 07:00 브리핑/14:00 할 일(src/schedule.js, node-cron, KST). Windows 작업 스케줄러는 더 이상 불필요(로컬용 잔재는 지워도 됨).
+- **시간대**: 날짜 로직이 서버 로컬시간=KST 가정. 클라우드(UTC)에선 **env TZ=Asia/Seoul 필수**. 아니면 '오늘' 계산이 9시간 어긋남. 서버 시작 시 offset≠540이면 경고 로그.
+- **SQLite 영속성**: DB 경로는 env DB_PATH로 지정 가능(기본 프로젝트폴더/planner.db). Render 무료 티어는 디스크 없음 → 재배포/재시작 시 초기화. 보존하려면 유료+영구디스크(/data) 또는 외부 DB.
+- planner.db와 .env는 .gitignore → 깃/Render엔 안 올라감 → 새 배포는 빈 DB로 시작(모든 아이디 빈 화면).
+- render.yaml = Render Blueprint(원클릭). /healthz = UptimeRobot용 헬스체크(5분 간격 핑 → 무료 티어 잠들기 방지).
+- PWA 설치와 SW는 HTTPS에서만 동작(Render는 https 제공).

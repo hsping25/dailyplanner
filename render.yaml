@@ -1,0 +1,25 @@
+# Render Blueprint — 대시보드에서 "New +" → "Blueprint" → 이 저장소 선택 시 자동 설정.
+services:
+  - type: web
+    name: daily-planner
+    runtime: node
+    plan: free                 # 무료 티어 (주의: 디스크 없음 → 재배포/재시작 시 SQLite 초기화)
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: TZ                 # 날짜/알림 시각 계산 기준 (필수)
+        value: Asia/Seoul
+      - key: NOTIFY_USER        # 알림 대상 아이디
+        value: 기본
+      - key: TELEGRAM_BOT_TOKEN # 대시보드에서 직접 입력 (커밋 금지)
+        sync: false
+      - key: TELEGRAM_CHAT_ID
+        sync: false
+
+    # ── 데이터를 계속 보존하려면(유료) 아래 주석을 풀고 위 plan을 starter 이상으로 ──
+    # disk:
+    #   name: planner-data
+    #   mountPath: /data
+    #   sizeGB: 1
+    # 그리고 환경변수 DB_PATH=/data/planner.db 추가
