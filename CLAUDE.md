@@ -37,7 +37,8 @@
 - 로그인 화면: 아이디 없으면 표시. 헤더의 @아이디 터치 → 다른 아이디로 전환.
 
 ## 데이터 모델
-- event: user, 제목, 시작/종료 시각, RRULE 문자열(반복일 때), 예외 목록 별도(event_exceptions: skip/override)
+- event: user, 제목, 시작/종료 시각, RRULE 문자열(반복일 때), 예외 목록 별도(event_exceptions: skip/override), 종일 여부(allday)
+- 일정 완료 체크: event_done 테이블(event_id, date) — 반복은 회차(date)별. 목록 오른쪽 체크박스. expandEvent가 occurrenceDate로 done 판정.
 - task: user, 제목, 마감일(선택), 완료 여부
 - 시각은 로컬 시각 문자열 "YYYY-MM-DDTHH:MM"로 저장 (KST 고정)
 - **하루의 경계는 오전 4시.** "오늘" = [오늘 04:00, 내일 04:00). 시간표 뷰는 06시~다음날 04시 표시.

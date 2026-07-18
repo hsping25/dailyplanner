@@ -64,6 +64,12 @@ export async function initDb() {
     UNIQUE (event_id, date)
   )`);
   await run(`CREATE TABLE IF NOT EXISTS notified (key TEXT PRIMARY KEY, sent_at TEXT NOT NULL)`);
+  // 일정 완료 체크: 반복은 회차(date)별로 완료 처리. 행이 있으면 그 회차는 완료.
+  await run(`CREATE TABLE IF NOT EXISTS event_done (
+    event_id INTEGER NOT NULL,
+    date TEXT NOT NULL,
+    PRIMARY KEY (event_id, date)
+  )`);
   await run(`CREATE TABLE IF NOT EXISTS tg_link ("user" TEXT PRIMARY KEY, chat_id TEXT, code TEXT)`);
   await run(`CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT)`);
   await run(`CREATE TABLE IF NOT EXISTS tasks (

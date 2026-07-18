@@ -26,23 +26,29 @@ export function dayWindow(date) {
   };
 }
 
-// 사용자의 이벤트 + 예외를 한 번에 로드 (여러 날짜 창을 그릴 때 재사용해 DB 조회 절약)
+// 사용자의 이벤트 + 예외 + 완료체크를 한 번에 로드 (여러 날짜 창에 재사용해 DB 조회 절약)
 export async function loadEvents(user = "기본") {
   const events = await all('SELECT * FROM events WHERE "user" = ?', [user]);
   const exceptions = await all("SELECT * FROM event_exceptions", []);
+  const dones = await all("SELECT event_id, date FROM event_done", []);
   const byEvent = new Map();
   for (const x of exceptions) {
     if (!byEvent.has(x.event_id)) byEvent.set(x.event_id, []);
     byEvent.get(x.event_id).push(x);
   }
-  return { events, byEvent };
+  const doneByEvent = new Map();
+  for (const dn of dones) {
+    if (!doneByEvent.has(dn.event_id)) doneByEvent.set(dn.event_id, new Set());
+    doneByEvent.get(dn.event_id).add(dn.date);
+  }
+  return { events, byEvent, doneByEvent };
 }
 
 // 로드된 이벤트를 특정 시간창으로 펼친다 (순수 계산, DB 접근 없음)
 export function expand(loaded, start, end) {
   const out = [];
   for (const e of loaded.events) {
-    out.push(...expandEvent(e, start, end, loaded.byEvent.get(e.id) ?? []));
+    out.push(...expandEvent(e, start, end, loaded.byEvent.get(e.id) ?? [], loaded.doneByEvent?.get(e.id) ?? null));
   }
   out.sort((a, b) => a.start.localeCompare(b.start));
   return out;

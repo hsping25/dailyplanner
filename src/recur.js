@@ -41,7 +41,7 @@ function addMinutes(parts, mins) {
  * exceptions: 이 이벤트의 예외 행 배열.
  * 반환: [{ eventId, title, start, end, recurring, occurrenceDate }]
  */
-export function expandEvent(event, rangeStart, rangeEnd, exceptions = []) {
+export function expandEvent(event, rangeStart, rangeEnd, exceptions = [], doneSet = null) {
   const out = [];
   const exByDate = new Map(exceptions.map(x => [x.date, x]));
 
@@ -60,6 +60,7 @@ export function expandEvent(event, rangeStart, rangeEnd, exceptions = []) {
         eventId: event.id, title, start, end,
         recurring: !!event.rrule, occurrenceDate: occDate,
         allday: !!event.allday,
+        done: doneSet ? doneSet.has(occDate) : false,
       });
     }
   };

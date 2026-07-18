@@ -186,6 +186,9 @@
     opacity: 0.85;
   }
   .block.past { opacity: 0.35; }
+  .block.done { opacity: 0.4; }
+  .block.done .name { text-decoration: line-through; }
+  .wt-block.done { opacity: 0.45; text-decoration: line-through; }
   .now-line {
     position: absolute;
     left: 44px; right: 0;
@@ -236,10 +239,11 @@
   /* ── 오늘 일정 ── */
   .event {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     gap: 14px;
     padding: 13px 0;
     border-bottom: 1px solid var(--line);
+    min-height: 52px;         /* 손가락 터치 영역 */
   }
   .event:last-child { border-bottom: none; }
   .event .time {
@@ -253,6 +257,19 @@
   .event .name {
     font-size: 20px;
     font-weight: 700;
+    flex: 1;
+    min-width: 0;
+  }
+  /* 오른쪽 완료 체크박스 */
+  .ev-check {
+    width: 26px; height: 26px;
+    flex-shrink: 0;
+    border: 2.5px solid var(--ink-dim);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 17px;
+    color: var(--bg);
+    cursor: pointer;
   }
   .event.recurring .time { color: var(--accent2); font-weight: 500; }
   .event.recurring .name {
@@ -261,6 +278,9 @@
   }
   .event.past { opacity: 0.35; }
   .event.past .name { text-decoration: line-through; }
+  .event.done .ev-check { background: var(--ink-dim); border-color: var(--ink-dim); }
+  .event.done .name { color: var(--ink-dim); text-decoration: line-through; font-weight: 500; }
+  .event.done .time { color: var(--ink-dim); }
   .empty {
     color: var(--ink-dim);
     font-size: 17px;
@@ -987,7 +1007,7 @@ function renderDateNav() {
 
 // 히어로: 오늘이면 다음 (시각 있는) 일정, 다른 날이면 그날 요약. 종일 일정은 시각 로직에서 제외.
 function renderHero() {
-  const timed = events.filter(e => !e.allday);
+  const timed = events.filter(e => !e.allday && !e.done);
   if (viewDate === todayStr) {
     const ongoing = timed.find(e => e.start <= now && now < e.end);
     const upcoming = timed.find(e => e.start > now);
@@ -1008,10 +1028,11 @@ function renderEvents() {
   // 종일 일정을 위로, 그다음 시각순
   const sorted = [...events].sort((a, b) => (b.allday ? 1 : 0) - (a.allday ? 1 : 0) || a.start - b.start);
   eventsEl.innerHTML = sorted.map(e => {
-    const past = !e.allday && e.end <= now;
-    const cls = ["event", e.recurring ? "recurring" : "", e.allday ? "allday" : "", past ? "past" : ""].join(" ");
-    return `<div class="${cls}" data-id="${e.eventId}" data-date="${e.occurrenceDate}">
-      <div class="time">${evTimeLabel(e)}</div><div class="name">${esc(e.title)}</div></div>`;
+    const past = !e.allday && !e.done && e.end <= now;
+    const cls = ["event", e.recurring ? "recurring" : "", e.allday ? "allday" : "", e.done ? "done" : "", past ? "past" : ""].join(" ");
+    return `<div class="${cls}" data-id="${e.eventId}" data-date="${e.occurrenceDate}" data-done="${e.done ? 1 : 0}">
+      <div class="time">${evTimeLabel(e)}</div><div class="name">${esc(e.title)}</div>
+      <div class="ev-check">${e.done ? "✓" : ""}</div></div>`;
   }).join("");
 }
 
@@ -1068,7 +1089,7 @@ function renderTimeline() {
       const s = new Date(it.start), e = new Date(it.end);
       const top = Math.max(0, wtYof(s));
       const hgt = Math.max(17, wtYof(e) - top - 2);
-      const cls = ["wt-block", it.recurring ? "rec" : "", e <= now ? "past" : ""].join(" ");
+      const cls = ["wt-block", it.recurring ? "rec" : "", it.done ? "done" : "", e <= now ? "past" : ""].join(" ");
       blocks += `<div class="${cls}" data-id="${it.eventId}" data-date="${it.occurrenceDate}"
         data-title="${escapeAttr(it.title)}" data-start="${it.start}" data-end="${it.end}" data-rec="${it.recurring ? 1 : 0}"
         style="top:${top}px;height:${hgt}px"><span>${esc(it.title)}</span></div>`;
@@ -1104,7 +1125,7 @@ function renderDayTimeline() {
     if (e.allday) continue;
     const top = Math.max(0, yOf(e.start));
     const height = Math.max(26, yOf(e.end) - top - 3);
-    const cls = ["block", e.recurring ? "recurring" : "", e.end <= now ? "past" : ""].join(" ");
+    const cls = ["block", e.recurring ? "recurring" : "", e.done ? "done" : "", e.end <= now ? "past" : ""].join(" ");
     html += `<div class="${cls}" data-id="${e.eventId}" data-date="${e.occurrenceDate}" style="top:${top}px;height:${height}px">
       <span class="name">${esc(e.title)}</span><span class="t">${fmtTime(e.start)}–${fmtTime(e.end)}</span></div>`;
   }
@@ -1184,7 +1205,22 @@ function renderAll() {
 // ── 위임 핸들러 (한 번만 붙임; innerHTML이 바뀌어도 유지됨) ──
 eventsEl.addEventListener("click", ev => {
   const row = ev.target.closest(".event");
-  if (row?.dataset.id) openEventEditor(Number(row.dataset.id), row.dataset.date);
+  if (!row?.dataset.id) return;
+  if (ev.target.closest(".ev-check")) {
+    // 오른쪽 체크박스 = 완료 토글 (낙관적: 즉시 반영, 서버 백그라운드)
+    ev.stopPropagation();
+    const willDone = row.dataset.done !== "1";
+    row.dataset.done = willDone ? "1" : "0";
+    row.classList.toggle("done", willDone);
+    if (willDone) row.classList.remove("past");
+    row.querySelector(".ev-check").textContent = willDone ? "✓" : "";
+    apiFetch(`/api/events/${row.dataset.id}/done`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ date: row.dataset.date, done: willDone }),
+    }).catch(() => {});
+  } else {
+    openEventEditor(Number(row.dataset.id), row.dataset.date);
+  }
 });
 tasksEl.addEventListener("click", ev => {
   const row = ev.target.closest(".task");

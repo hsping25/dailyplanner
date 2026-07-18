@@ -73,7 +73,7 @@ async function weekFor(date, user, loaded) {
     const items = expand(loaded, w.start, w.end).map(e => ({
       kind: "event", title: e.title, start: e.start, end: e.end,
       recurring: e.recurring, eventId: e.eventId, occurrenceDate: e.occurrenceDate,
-      allday: e.allday,
+      allday: e.allday, done: e.done,
     }));
     for (const t of tasksByDate.get(dayDate) ?? []) items.push({ kind: "task", title: t.title });
     week.push({ date: dayDate, items });
@@ -144,7 +144,25 @@ app.put("/api/events/:id", ah(async (req, res) => {
 
 app.delete("/api/events/:id", ah(async (req, res) => {
   const r = await run('DELETE FROM events WHERE id = ? AND "user" = ?', [req.params.id, userOf(req)]);
-  if (r.changes) await run("DELETE FROM event_exceptions WHERE event_id = ?", [req.params.id]);
+  if (r.changes) {
+    await run("DELETE FROM event_exceptions WHERE event_id = ?", [req.params.id]);
+    await run("DELETE FROM event_done WHERE event_id = ?", [req.params.id]);
+  }
+  res.json({ ok: true });
+}));
+
+// 일정 완료 체크 토글 (반복은 회차 date별). body: { date, done }
+app.post("/api/events/:id/done", ah(async (req, res) => {
+  const { date, done } = req.body;
+  if (!date) return res.status(400).json({ error: "date는 필수" });
+  const owns = await get('SELECT 1 FROM events WHERE id = ? AND "user" = ?', [req.params.id, userOf(req)]);
+  if (!owns) return res.status(404).json({ error: "없는 일정" });
+  if (done) {
+    await run(`INSERT INTO event_done (event_id, date) VALUES (?, ?)
+      ON CONFLICT (event_id, date) DO NOTHING`, [req.params.id, date]);
+  } else {
+    await run("DELETE FROM event_done WHERE event_id = ? AND date = ?", [req.params.id, date]);
+  }
   res.json({ ok: true });
 }));
 
