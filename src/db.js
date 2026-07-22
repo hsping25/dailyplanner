@@ -79,11 +79,15 @@ export async function initDb() {
     due TEXT,
     done INTEGER NOT NULL DEFAULT 0
   )`);
-  // 메모장: 자유 텍스트 메모. updated는 "YYYY-MM-DDTHH:MM" 로컬 시각(정렬용).
+  // 메모장: 자유 메모. kind='text'면 content는 글, 'draw'면 PNG 데이터 URL(손그림).
+  // updated는 "YYYY-MM-DDTHH:MM" 로컬 시각(정렬용).
   await run(`CREATE TABLE IF NOT EXISTS memos (
     id ${AUTO},
     "user" TEXT NOT NULL DEFAULT '기본',
     content TEXT NOT NULL DEFAULT '',
+    kind TEXT NOT NULL DEFAULT 'text',
     updated TEXT NOT NULL
   )`);
+  // kind 칸이 없던 시절 DB엔 칸만 추가 (이미 있으면 에러 → 무시)
+  await run(`ALTER TABLE memos ADD COLUMN kind TEXT NOT NULL DEFAULT 'text'`).catch(() => {});
 }

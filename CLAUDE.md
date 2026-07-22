@@ -40,7 +40,7 @@
 - event: user, 제목, 시작/종료 시각, RRULE 문자열(반복일 때), 예외 목록 별도(event_exceptions: skip/override), 종일 여부(allday)
 - 일정 완료 체크: event_done 테이블(event_id, date) — 반복은 회차(date)별. 목록 오른쪽 체크박스. expandEvent가 occurrenceDate로 done 판정.
 - task: user, 제목, 마감일(선택), 완료 여부
-- memo: user, 내용(자유 텍스트), updated(수정 시각 — 최근 수정순 정렬용). API: /api/memos CRUD.
+- memo: user, kind(text|draw), 내용(text=글, draw=PNG 데이터 URL), updated(수정 시각 — 최근 수정순 정렬용). API: /api/memos CRUD. 그림 때문에 express.json limit 5mb.
 - 시각은 로컬 시각 문자열 "YYYY-MM-DDTHH:MM"로 저장 (KST 고정)
 - **하루의 경계는 오전 4시.** "오늘" = [오늘 04:00, 내일 04:00). 시간표 뷰는 06시~다음날 04시 표시.
 - RRULE 펼치기는 fake-UTC 기법 사용 (src/recur.js 주석 참고)
@@ -52,6 +52,7 @@
 - 시간표 모드: **일주일 전체**를 7열 타임라인(06시~다음날 04시)으로. 블록은 색+앞글자만, 탭/호버 시 팝업으로 세부(제목·시간·수정버튼).
 - 날짜 이동은 두 모드 공통 ±1일. 시간표는 보는 날이 속한 주를 보여주고 그 날 열을 강조.
 - 메모장 모드: 날짜와 무관한 자유 메모 목록(최근 수정순). "＋ 새 메모"로 추가, 카드의 textarea에 바로 쓰면 자동 저장(입력 멈춤 0.6초/포커스 아웃), 삭제 버튼(내용 있으면 confirm). 이 모드에선 히어로와 입력바를 감춘다.
+- 그림 메모: "✏️ 그림" → 전체 화면 캔버스(펜/지우개/되돌리기 20단계/비우기, 포인터 이벤트+touch-action:none, dpr 배율). 저장 시 PNG 데이터 URL을 content에. 카드의 그림 탭 = 이어서 그리기(기존 그림을 캔버스에 contain으로 깔고 시작). 캔버스는 항상 흰 바탕+검정 펜(테마 무관).
 
 ## UI 상태/설정 (localStorage)
 - planner_user(아이디), view(list|blocks|memo), theme(auto|light|dark).

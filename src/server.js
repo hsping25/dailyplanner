@@ -10,7 +10,7 @@ import { getBotUsername } from "./telegram.js";
 import { linkCode, linkStatus, unlink, startTgPoller } from "./tglink.js";
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: "5mb" })); // 그림 메모(PNG 데이터 URL)가 기본 100kb를 넘을 수 있음
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 app.use(express.static(path.join(root, "public")));
@@ -223,9 +223,10 @@ app.get("/api/memos", ah(async (req, res) => {
 
 app.post("/api/memos", ah(async (req, res) => {
   const content = typeof req.body?.content === "string" ? req.body.content : "";
+  const kind = req.body?.kind === "draw" ? "draw" : "text";
   const id = await insert(
-    'INSERT INTO memos ("user", content, updated) VALUES (?, ?, ?)',
-    [userOf(req), content, nowStamp()]);
+    'INSERT INTO memos ("user", content, kind, updated) VALUES (?, ?, ?, ?)',
+    [userOf(req), content, kind, nowStamp()]);
   res.json({ id });
 }));
 
