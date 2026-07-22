@@ -743,6 +743,71 @@
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
 
+  /* ── 메모장 뷰 ── */
+  #view-memo { display: none; }
+  .memo-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .memo-head h2 { margin-bottom: 0; }
+  #memo-new {
+    border: none;
+    background: var(--accent);
+    color: #fff;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 700;
+    padding: 8px 14px;
+    border-radius: 10px;
+    cursor: pointer;
+  }
+  .memo-card {
+    background: var(--card);
+    border-radius: 14px;
+    padding: 12px 14px 6px;
+    margin-bottom: 12px;
+  }
+  .memo-text {
+    display: block;
+    width: 100%;
+    border: none;
+    background: none;
+    resize: none;
+    font-family: inherit;
+    font-size: 16px;
+    line-height: 1.5;
+    color: var(--ink);
+    outline: none;
+    min-height: 48px;
+    overflow: hidden;
+  }
+  .memo-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 2px;
+  }
+  .memo-date { font-size: 12px; color: var(--ink-dim); }
+  .memo-del {
+    border: none;
+    background: none;
+    color: var(--ink-dim);
+    font-family: inherit;
+    font-size: 13px;
+    padding: 8px;
+    margin-right: -8px;
+    cursor: pointer;
+  }
+  .memo-empty {
+    color: var(--ink-dim);
+    text-align: center;
+    padding: 36px 0;
+    font-size: 15px;
+    line-height: 1.7;
+  }
+
   /* ── 가로 모드: 폭을 넓게 쓰고 하단 입력바 여백 줄임 ── */
   @media (orientation: landscape) {
     body { max-width: 720px; padding-bottom: 110px; }
@@ -769,6 +834,7 @@
   <div class="switch">
     <button id="btn-list" class="on">목록</button>
     <button id="btn-blocks">시간표</button>
+    <button id="btn-memo">메모장</button>
   </div>
   <span id="who" class="who"></span>
 </div>
@@ -815,6 +881,16 @@
       <div class="wt-pop" id="wt-pop" hidden></div>
       <div class="wt" id="week-timeline"></div>
     </div>
+  </section>
+</div>
+
+<div id="view-memo">
+  <section>
+    <div class="memo-head">
+      <h2>메모장</h2>
+      <button id="memo-new">＋ 새 메모</button>
+    </div>
+    <div id="memos"></div>
   </section>
 </div>
 
@@ -1257,21 +1333,108 @@ document.getElementById("day-prev").onclick = () => loadDay(shiftStr(viewDate, -
 document.getElementById("day-next").onclick = () => loadDay(shiftStr(viewDate, 1));
 todayBtn.onclick = () => loadDay(todayStr);
 
-// 뷰 전환
+// 뷰 전환 (목록 / 시간표 / 메모장)
 const btnList = document.getElementById("btn-list");
 const btnBlocks = document.getElementById("btn-blocks");
+const btnMemo = document.getElementById("btn-memo");
 const viewList = document.getElementById("view-list");
 const viewBlocks = document.getElementById("view-blocks");
+const viewMemo = document.getElementById("view-memo");
+const heroEl = document.getElementById("next-event");
+const chatBarEl = document.querySelector(".chat-bar");
 function showView(name) {
-  const list = name === "list";
-  viewList.style.display = list ? "" : "none";
-  viewBlocks.style.display = list ? "none" : "block";
-  btnList.classList.toggle("on", list);
-  btnBlocks.classList.toggle("on", !list);
+  const memo = name === "memo";
+  viewList.style.display = name === "list" ? "" : "none";
+  viewBlocks.style.display = name === "blocks" ? "block" : "none";
+  viewMemo.style.display = memo ? "block" : "none";
+  btnList.classList.toggle("on", name === "list");
+  btnBlocks.classList.toggle("on", name === "blocks");
+  btnMemo.classList.toggle("on", memo);
+  // 메모장은 날짜와 무관: 히어로와 일정 입력바를 감춘다
+  heroEl.style.display = memo ? "none" : "";
+  chatBarEl.style.display = memo ? "none" : "";
+  if (memo) loadMemos();
   localStorage.setItem("view", name);
 }
 btnList.onclick = () => showView("list");
 btnBlocks.onclick = () => showView("blocks");
+btnMemo.onclick = () => showView("memo");
+
+// ── 메모장: 목록 불러오기 + 자동 저장(입력 멈추면) + 삭제 ──
+const memosEl = document.getElementById("memos");
+
+async function loadMemos() {
+  const r = await apiFetch("/api/memos");
+  const { memos } = await r.json();
+  memosEl.innerHTML = memos.length ? memos.map(m => `
+    <div class="memo-card" data-id="${m.id}">
+      <textarea class="memo-text" placeholder="메모를 입력하세요">${esc(m.content)}</textarea>
+      <div class="memo-foot">
+        <span class="memo-date">${fmtMemoDate(m.updated)}</span>
+        <button class="memo-del">삭제</button>
+      </div>
+    </div>`).join("")
+    : `<div class="memo-empty">아직 메모가 없어요.<br>"＋ 새 메모"를 눌러 시작하세요.</div>`;
+  memosEl.querySelectorAll(".memo-text").forEach(growMemo);
+}
+
+// "2026-07-23T14:05" → "7/23 14:05"
+function fmtMemoDate(s) {
+  if (!s) return "";
+  return `${Number(s.slice(5, 7))}/${Number(s.slice(8, 10))} ${s.slice(11, 16)}`;
+}
+
+// 내용 길이에 맞춰 textarea 높이 자동 조절
+function growMemo(ta) {
+  ta.style.height = "auto";
+  ta.style.height = ta.scrollHeight + "px";
+}
+
+async function saveMemo(id, content) {
+  await apiFetch(`/api/memos/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ content }),
+  });
+}
+
+// 입력이 잠시 멈추면 자동 저장 (메모별 타이머)
+const memoTimers = new Map();
+memosEl.addEventListener("input", ev => {
+  const ta = ev.target.closest(".memo-text");
+  if (!ta) return;
+  growMemo(ta);
+  const id = ta.closest(".memo-card").dataset.id;
+  clearTimeout(memoTimers.get(id));
+  memoTimers.set(id, setTimeout(() => saveMemo(id, ta.value), 600));
+});
+// 입력창을 벗어나면 바로 저장
+memosEl.addEventListener("focusout", ev => {
+  const ta = ev.target.closest(".memo-text");
+  if (!ta) return;
+  const id = ta.closest(".memo-card").dataset.id;
+  clearTimeout(memoTimers.get(id));
+  saveMemo(id, ta.value);
+});
+memosEl.addEventListener("click", async ev => {
+  const del = ev.target.closest(".memo-del");
+  if (!del) return;
+  const card = del.closest(".memo-card");
+  const ta = card.querySelector(".memo-text");
+  if (ta.value.trim() && !confirm("이 메모를 삭제할까요?")) return;
+  clearTimeout(memoTimers.get(card.dataset.id));
+  await apiFetch(`/api/memos/${card.dataset.id}`, { method: "DELETE" });
+  loadMemos();
+});
+document.getElementById("memo-new").onclick = async () => {
+  await apiFetch("/api/memos", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ content: "" }),
+  });
+  await loadMemos();
+  memosEl.querySelector(".memo-text")?.focus();
+};
 
 // ── 이번 주 점(목록 모드 하단): 날짜 탭 = 그날로 이동, 호버 = 미리보기 ──
 const weekEl = document.getElementById("week");

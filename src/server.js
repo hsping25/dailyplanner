@@ -208,6 +208,42 @@ app.delete("/api/tasks/:id", ah(async (req, res) => {
   res.json({ ok: true });
 }));
 
+// ── 메모장 CRUD ──
+// 지금 시각을 저장 형식("YYYY-MM-DDTHH:MM")으로 (최근 수정순 정렬용)
+const nowStamp = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+
+app.get("/api/memos", ah(async (req, res) => {
+  const memos = await all(
+    'SELECT * FROM memos WHERE "user" = ? ORDER BY updated DESC, id DESC', [userOf(req)]);
+  res.json({ memos });
+}));
+
+app.post("/api/memos", ah(async (req, res) => {
+  const content = typeof req.body?.content === "string" ? req.body.content : "";
+  const id = await insert(
+    'INSERT INTO memos ("user", content, updated) VALUES (?, ?, ?)',
+    [userOf(req), content, nowStamp()]);
+  res.json({ id });
+}));
+
+app.patch("/api/memos/:id", ah(async (req, res) => {
+  const { content } = req.body;
+  if (typeof content !== "string") return res.status(400).json({ error: "content는 필수" });
+  const r = await run(
+    'UPDATE memos SET content = ?, updated = ? WHERE id = ? AND "user" = ?',
+    [content, nowStamp(), req.params.id, userOf(req)]);
+  if (r.changes === 0) return res.status(404).json({ error: "없는 메모" });
+  res.json({ ok: true });
+}));
+
+app.delete("/api/memos/:id", ah(async (req, res) => {
+  await run('DELETE FROM memos WHERE id = ? AND "user" = ?', [req.params.id, userOf(req)]);
+  res.json({ ok: true });
+}));
+
 // 날짜 로직은 서버의 시간대를 KST로 가정한다. 클라우드(UTC)에선 TZ=Asia/Seoul 필수.
 const tzOffset = -new Date().getTimezoneOffset(); // KST면 540(분)
 if (tzOffset !== 540) {

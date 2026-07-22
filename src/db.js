@@ -79,4 +79,11 @@ export async function initDb() {
     due TEXT,
     done INTEGER NOT NULL DEFAULT 0
   )`);
+  // 메모장: 자유 텍스트 메모. updated는 "YYYY-MM-DDTHH:MM" 로컬 시각(정렬용).
+  await run(`CREATE TABLE IF NOT EXISTS memos (
+    id ${AUTO},
+    "user" TEXT NOT NULL DEFAULT '기본',
+    content TEXT NOT NULL DEFAULT '',
+    updated TEXT NOT NULL
+  )`);
 }
