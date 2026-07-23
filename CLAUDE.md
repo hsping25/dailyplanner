@@ -68,14 +68,14 @@
    일정/할 일 수정·삭제: 항목 터치 → 바텀시트 모달 (GET /api/events/:id + PUT/DELETE, tasks PATCH/DELETE). 반복은 "이 날짜만 빼기(skip)" / "반복 전체 삭제".
 5. ✅ 아침 브리핑 — src/briefing.js (npm run brief). Windows 작업 스케줄러 "DailyPlannerBriefing"이 매일 07:00 실행. .env에 TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID 필요 (아직 미설정)
    - 알림 체계: 할 일은 마감 당일 07:00(브리핑 포함) + 14:00(src/remind-tasks.js, 스케줄러 "DailyPlannerTasks2pm", 남은 것 없으면 안 보냄).
-     일정은 시작 10분 전(src/notify.js, 서버에 내장된 30초 감시 루프, notified 테이블로 중복 방지). 텔레그램 전송은 src/telegram.js 공용.
+     일정은 시작 10분 전 + 정시 총 2번(src/notify.js, 서버에 내장된 30초 감시 루프, notified 테이블에 단계별 키(lead/start)로 중복 방지, 정시는 1분 지각까지만). 텔레그램 전송은 src/telegram.js 공용.
 6. ✅ PWA — public/manifest.json, public/sw.js, public/icons/ (아이콘 생성기: scripts/gen-icons.mjs).
    index.html에 manifest 링크 + theme-color(라이트/다크) + apple-touch-icon + SW 등록.
    SW는 /api/* 는 캐시하지 않음(항상 최신). 배포는 아래 "배포" 절 참고.
 
 ## 배포 (Render + UptimeRobot) — README.md에 사용자용 안내 있음
 - 실행: `npm start`(=node src/server.js, 프로덕션). 로컬 개발은 `npm run dev`(nodemon). Node 24 필수(node:sqlite). `.node-version`=24, engines 지정.
-- 알림 3종 모두 서버 안에서 동작: 10분 전(src/notify.js 30초 루프) + 07:00 브리핑/14:00 할 일(src/schedule.js, node-cron, KST). Windows 작업 스케줄러는 더 이상 불필요(로컬용 잔재는 지워도 됨).
+- 알림 3종 모두 서버 안에서 동작: 일정 10분 전+정시(src/notify.js 30초 루프) + 07:00 브리핑/14:00 할 일(src/schedule.js, node-cron, KST). Windows 작업 스케줄러는 더 이상 불필요(로컬용 잔재는 지워도 됨).
 - **시간대**: 날짜 로직이 서버 로컬시간=KST 가정. 클라우드(UTC)에선 **env TZ=Asia/Seoul 필수**. 아니면 '오늘' 계산이 9시간 어긋남. 서버 시작 시 offset≠540이면 경고 로그.
 - **영속성**: 배포는 Neon Postgres(무료·영구). Render 환경변수 DATABASE_URL에 Neon 연결 문자열 넣으면 자동으로 Postgres 사용. 안 넣으면 SQLite(로컬/휘발). DB_PATH는 SQLite 파일 경로용(로컬).
 - planner.db와 .env는 .gitignore → 깃/Render엔 안 올라감. Postgres는 최초 배포 때 빈 스키마로 시작.
