@@ -1548,6 +1548,9 @@ let drawMemoId = null;   // 수정 중인 메모 id (새 그림이면 null)
 let drawTool = "pen";
 let drawing = false;
 let undoStack = [];      // 획 시작 전 화면 스냅샷 (최대 20개)
+let penSeen = false;     // 펜(스타일러스)이 한 번이라도 감지되면 true → 팜 리젝션 켜짐
+let activePointer = null; // 지금 그리는 포인터 id (동시에 여러 손가락 무시)
+let activeType = null;    // 그 포인터 종류 (pen/touch/mouse)
 
 function setTool(t) {
   drawTool = t;
@@ -1570,6 +1573,9 @@ function openDraw(memoId, src) {
   drawModal.hidden = false;
   setTool("pen");
   undoStack = [];
+  penSeen = false;       // 새로 열 때마다 팜 리젝션 초기화 (펜 감지 전엔 손가락 허용)
+  activePointer = null;
+  activeType = null;
   // 화면 크기에 맞춰 캔버스 해상도 설정 (선명하게 dpr 배율)
   const rect = dCanvas.getBoundingClientRect();
   const dpr = window.devicePixelRatio || 1;
@@ -1621,9 +1627,31 @@ document.getElementById("draw-save").onclick = async () => {
 };
 document.getElementById("memo-draw-new").onclick = () => openDraw(null, null);
 
+// 이 포인터로 그릴지 판단 (팜 리젝션)
+// - 펜/마우스는 항상 허용. 펜을 한 번이라도 쓰면 penSeen=true.
+// - penSeen이면 손가락(touch)은 손바닥으로 보고 무시 → 펜으로 그릴 때 손바닥 오작동 방지.
+// - 펜을 안 쓰는 사람은 penSeen이 계속 false라 손가락 그리기가 그대로 된다.
+function acceptPointer(type) {
+  if (type === "pen") { penSeen = true; return true; }
+  if (type === "mouse") return true;
+  return !penSeen; // touch
+}
+
 // 포인터(손가락·펜·마우스 공통)로 선 긋기
 dCanvas.addEventListener("pointerdown", ev => {
+  if (!acceptPointer(ev.pointerType)) return; // 손바닥/여분 손가락 무시
+  if (activePointer !== null) {
+    // 손가락으로 그리던 중 펜이 닿으면: 손가락 획(손바닥)을 되돌리고 펜이 이어받는다
+    if (ev.pointerType === "pen" && activeType === "touch") {
+      const snap = undoStack.pop();
+      if (snap) dCtx.putImageData(snap, 0, 0);
+    } else {
+      return; // 그 밖의 겹친 포인터는 무시
+    }
+  }
   ev.preventDefault();
+  activePointer = ev.pointerId;
+  activeType = ev.pointerType;
   dCanvas.setPointerCapture(ev.pointerId);
   pushUndo();
   drawing = true;
@@ -1635,13 +1663,18 @@ dCanvas.addEventListener("pointerdown", ev => {
   dCtx.stroke();
 });
 dCanvas.addEventListener("pointermove", ev => {
-  if (!drawing) return;
+  if (!drawing || ev.pointerId !== activePointer) return;
   // 브라우저가 합쳐 놓은 중간 좌표까지 그려서 빠른 획도 부드럽게
   const events = ev.getCoalescedEvents?.() ?? [ev];
   for (const e of events) { dCtx.lineTo(e.offsetX, e.offsetY); }
   dCtx.stroke();
 });
-const endStroke = () => { drawing = false; };
+const endStroke = ev => {
+  if (ev.pointerId !== activePointer) return;
+  drawing = false;
+  activePointer = null;
+  activeType = null;
+};
 dCanvas.addEventListener("pointerup", endStroke);
 dCanvas.addEventListener("pointercancel", endStroke);
 
