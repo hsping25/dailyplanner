@@ -1,6 +1,6 @@
 // 서비스워커: 홈 화면 설치를 가능하게 하고, 오프라인일 때 앱 껍데기를 보여준다.
 // 주의: 일정/할 일 데이터(/api/*)는 절대 캐시하지 않는다 — 항상 최신이어야 하므로.
-const CACHE = "planner-v5"; // 버전을 올리면 설치된 폰에서도 옛 캐시가 교체됨
+const CACHE = "planner-v6"; // 버전을 올리면 설치된 폰에서도 옛 캐시가 교체됨
 const SHELL = ["/", "/manifest.json", "/icons/icon-192.png", "/icons/icon-512.png"];
 
 self.addEventListener("install", (e) => {
