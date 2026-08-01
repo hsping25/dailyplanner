@@ -1377,8 +1377,12 @@ function applyData(d) {
   streakN = d.streak ?? 0;
   goals = d.goals ?? [];
 }
+// 화살표를 연타하면 요청이 겹친다. 마지막 요청만 화면에 반영하고 늦게 온 응답은 버린다.
+let loadSeq = 0;
 async function loadDay(ds) {
+  const mine = ++loadSeq;
   const d = await (await apiFetch("/api/day?date=" + ds)).json();
+  if (mine !== loadSeq) return;
   applyData(d);
   renderAll();
 }
@@ -1817,16 +1821,21 @@ focus3SlotsEl.addEventListener("click", ev => {
   else openTaskEditor(taskById.get(id));
 });
 
-// 성적 바/주간 고리만 다시 받아온다 (전체 재렌더 없이 숫자만 갱신)
-async function refreshScores() {
-  try {
-    const j = await (await apiFetch(
-      `/api/scores?from=${weekData[0].date}&to=${weekData[6].date}`)).json();
-    scores = j.scores ?? scores;
-    streakN = j.streak ?? streakN;
-    renderDayScore();
-    renderWeekStrip();
-  } catch {}
+// 성적 바/주간 고리만 다시 받아온다 (전체 재렌더 없이 숫자만 갱신).
+// 체크박스를 연달아 누르면 요청이 그만큼 나가므로 0.4초 모아서 한 번만.
+let scoreTimer = null;
+function refreshScores() {
+  clearTimeout(scoreTimer);
+  scoreTimer = setTimeout(async () => {
+    try {
+      const j = await (await apiFetch(
+        `/api/scores?from=${weekData[0].date}&to=${weekData[6].date}`)).json();
+      scores = j.scores ?? scores;
+      streakN = j.streak ?? streakN;
+      renderDayScore();
+      renderWeekStrip();
+    } catch {}
+  }, 400);
 }
 wtEl.addEventListener("click", ev => {
   const b = ev.target.closest(".wt-block");

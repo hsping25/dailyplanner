@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { get, all, run, insert, initDb } from "./db.js";
 import { parseText } from "./parse.js";
 import { todayStr, shiftDate, weekStart, nowStamp, dayWindow, eventsInWindow, loadEvents, expand } from "./day.js";
-import { dayScore, closeDay, dayLog, scoresBetween, streak, tasksForDate } from "./review.js";
+import { dayScore, closeDay, dayLog, scoresBetween, streak } from "./review.js";
 import { startNotifier } from "./notify.js";
 import { startSchedules } from "./schedule.js";
 import { getBotUsername } from "./telegram.js";
@@ -40,36 +40,53 @@ app.get("/api/day", ah(async (req, res) => {
   const date = req.query.date || todayStr();
   const { start, end } = dayWindow(date);
 
-  const loaded = await loadEvents(user);        // 이벤트는 한 번만 로드해 아래에서 재사용
-  const events = expand(loaded, start, end);
-  // 버린 것(archived)은 안 보인다. 핵심(star_date)은 마감이 없어도 그날 목록에 올라온다.
-  const tasks = await all(
-    `SELECT * FROM tasks WHERE "user" = ? AND archived = 0
-       AND (done = 0 OR due = ? OR star_date = ?)
-     ORDER BY CASE WHEN star_date = ? THEN 0 ELSE 1 END, due IS NULL, due, id`,
-    [user, date, date, date]);
-
   const monday = weekStart(date);
+  const sunday = shiftDate(monday, 6);
+
+  // 이벤트는 한 번만 로드하고, 7일치 펼치기도 한 번만 해서 주간 점·성적·그날 목록이 함께 쓴다.
+  // 나머지 조회는 서로 의존하지 않으므로 동시에 던진다 — Neon Postgres에선 왕복 하나가 곧 지연이라
+  // 순차로 await하면 날짜를 넘길 때마다 그만큼 기다리게 된다.
+  const loaded = await loadEvents(user);
+  const byDay = expandWeek(loaded, monday);
+  const [tasks, week, scores, log, st, goals] = await Promise.all([
+    // 버린 것(archived)은 안 보인다. 핵심(star_date)은 마감이 없어도 그날 목록에 올라온다.
+    all(`SELECT * FROM tasks WHERE "user" = ? AND archived = 0
+           AND (done = 0 OR due = ? OR star_date = ?)
+         ORDER BY CASE WHEN star_date = ? THEN 0 ELSE 1 END, due IS NULL, due, id`,
+      [user, date, date, date]),
+    weekFor(monday, sunday, user, byDay),
+    scoresBetween(user, monday, sunday, loaded, byDay),
+    dayLog(user, date),
+    streak(user),
+    all('SELECT * FROM goals WHERE "user" = ? AND week = ? ORDER BY id', [user, monday]),
+  ]);
+
   res.json({
-    date, events, tasks,
-    week: await weekFor(date, user, loaded),
-    scores: await scoresBetween(user, monday, shiftDate(monday, 6), loaded),
-    log: await dayLog(user, date),
-    streak: await streak(user),
-    goals: await all('SELECT * FROM goals WHERE "user" = ? AND week = ? ORDER BY id', [user, monday]),
+    date,
+    events: byDay.get(date) ?? expand(loaded, start, end),
+    tasks, week, scores, log, streak: st, goals,
   });
 }));
+
+// 월요일부터 7일치를 한 번에 펼쳐 date → 일정 배열로 (순수 계산, DB 접근 없음)
+function expandWeek(loaded, monday) {
+  const byDay = new Map();
+  for (let i = 0; i < 7; i++) {
+    const d = shiftDate(monday, i);
+    const w = dayWindow(d);
+    byDay.set(d, expand(loaded, w.start, w.end));
+  }
+  return byDay;
+}
 
 // ── 하루 닫기(회고) ──
 app.get("/api/review", ah(async (req, res) => {
   const user = userOf(req);
   const date = req.query.date || todayStr();
-  const s = await dayScore(user, date);
+  const [s, log, st] = await Promise.all([dayScore(user, date), dayLog(user, date), streak(user)]);
   res.json({
     date, planned: s.planned, done: s.done, starPlanned: s.starPlanned, starDone: s.starDone,
-    events: s.events, tasks: s.tasks,
-    log: await dayLog(user, date),
-    streak: await streak(user),
+    events: s.events, tasks: s.tasks, log, streak: st,
   });
 }));
 
@@ -89,7 +106,8 @@ app.get("/api/scores", ah(async (req, res) => {
   const user = userOf(req);
   const to = req.query.to || todayStr();
   const from = req.query.from || weekStart(to);
-  res.json({ scores: await scoresBetween(user, from, to), streak: await streak(user) });
+  const [scores, st] = await Promise.all([scoresBetween(user, from, to), streak(user)]);
+  res.json({ scores, streak: st });
 }));
 
 // ── 주간 목표 (한 주 최대 3개) ──
@@ -124,17 +142,11 @@ app.delete("/api/goals/:id", ah(async (req, res) => {
   res.json({ ok: true });
 }));
 
-// date가 속한 주(월~일)의 요일별 일정 + 안 끝난 할 일 목록 (점 개수와 팝업에 사용)
-// 이벤트는 한 번만 로드해 7일치를 메모리에서 펼치고, 주간 할일도 한 번의 쿼리로.
-async function weekFor(date, user, loaded) {
-  if (!loaded) loaded = await loadEvents(user);
-  const [y, m, d] = date.split("-").map(Number);
-  const dow = (new Date(y, m - 1, d).getDay() + 6) % 7; // 월=0
-  const monday = shiftDate(date, -dow);
-  const sunday = shiftDate(monday, 6);
-
+// 그 주의 요일별 일정 + 안 끝난 할 일 목록 (점 개수와 팝업에 사용).
+// 펼치기는 호출자가 준 byDay를 그대로 쓰고, 주간 할 일만 한 번 조회한다.
+async function weekFor(monday, sunday, user, byDay) {
   const weekTasks = await all(
-    'SELECT title, due FROM tasks WHERE "user" = ? AND done = 0 AND due >= ? AND due <= ?',
+    'SELECT title, due FROM tasks WHERE "user" = ? AND archived = 0 AND done = 0 AND due >= ? AND due <= ?',
     [user, monday, sunday]);
   const tasksByDate = new Map();
   for (const t of weekTasks) {
@@ -145,8 +157,7 @@ async function weekFor(date, user, loaded) {
   const week = [];
   for (let i = 0; i < 7; i++) {
     const dayDate = shiftDate(monday, i);
-    const w = dayWindow(dayDate);
-    const items = expand(loaded, w.start, w.end).map(e => ({
+    const items = (byDay.get(dayDate) ?? []).map(e => ({
       kind: "event", title: e.title, start: e.start, end: e.end,
       recurring: e.recurring, eventId: e.eventId, occurrenceDate: e.occurrenceDate,
       allday: e.allday, done: e.done,
@@ -159,8 +170,10 @@ async function weekFor(date, user, loaded) {
 
 // 주간 이동용
 app.get("/api/week", ah(async (req, res) => {
-  const date = req.query.date || todayStr();
-  res.json({ week: await weekFor(date, userOf(req)) });
+  const user = userOf(req);
+  const monday = weekStart(req.query.date || todayStr());
+  const byDay = expandWeek(await loadEvents(user), monday);
+  res.json({ week: await weekFor(monday, shiftDate(monday, 6), user, byDay) });
 }));
 
 // 등록 전 겹침 확인

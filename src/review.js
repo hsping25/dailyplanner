@@ -20,6 +20,24 @@ export async function tasksForDate(user, date) {
     [user, date, date]);
 }
 
+// 구간(주간)의 할 일을 **한 번의 쿼리로** 읽어 날짜별로 묶는다.
+// 하루씩 tasksForDate를 부르면 왕복이 날짜 수만큼 늘어나 날짜 이동이 눈에 띄게 느려진다.
+// 마감일과 핵심일이 다르면 두 날짜 모두에 들어가고, 같으면 Map이라 한 번만 센다.
+export async function tasksByDateInRange(user, from, to) {
+  const rows = await all(
+    `SELECT * FROM tasks WHERE "user" = ? AND archived = 0
+       AND ((due >= ? AND due <= ?) OR (star_date >= ? AND star_date <= ?))`,
+    [user, from, to, from, to]);
+  const byDate = new Map();
+  const put = (d, t) => {
+    if (!d || d < from || d > to) return;
+    if (!byDate.has(d)) byDate.set(d, new Map());
+    byDate.get(d).set(t.id, t);
+  };
+  for (const t of rows) { put(t.due, t); put(t.star_date, t); }
+  return byDate;
+}
+
 // 한 날의 성적. loaded를 넘기면 이벤트를 다시 읽지 않는다(주간 계산에서 재사용).
 export async function dayScore(user, date, loaded) {
   if (!loaded) loaded = await loadEvents(user);
@@ -118,11 +136,16 @@ export async function dayLog(user, date) {
 }
 
 // 주간(또는 임의 구간) 성적. 닫은 날은 저장된 스냅샷을, 안 닫은 날은 지금 계산값을 쓴다.
-export async function scoresBetween(user, from, to, loaded) {
-  if (!loaded) loaded = await loadEvents(user);
-  const logs = new Map(
-    (await all('SELECT * FROM day_log WHERE "user" = ? AND date >= ? AND date <= ?', [user, from, to]))
-      .map(r => [r.date, r]));
+// DB는 두 번만 읽는다(day_log 한 번, 할 일 한 번). 나머지는 전부 메모리 계산.
+// byDay를 넘기면 그 날짜의 이벤트 펼치기를 재사용한다(주간 시간표와 중복 계산 방지).
+export async function scoresBetween(user, from, to, loaded, byDay = null) {
+  const [logRows, tasksByDate] = await Promise.all([
+    all('SELECT * FROM day_log WHERE "user" = ? AND date >= ? AND date <= ?', [user, from, to]),
+    tasksByDateInRange(user, from, to),
+  ]);
+  if (!loaded && !byDay) loaded = await loadEvents(user);
+  const logs = new Map(logRows.map(r => [r.date, r]));
+
   const out = [];
   for (let d = from; d <= to; d = shiftDate(d, 1)) {
     const lg = logs.get(d);
@@ -132,14 +155,20 @@ export async function scoresBetween(user, from, to, loaded) {
         starPlanned: lg.star_planned, starDone: lg.star_done,
         closed: true, note: lg.note, mood: lg.mood,
       });
-    } else {
-      const s = await dayScore(user, d, loaded);
-      out.push({
-        date: d, planned: s.planned, done: s.done,
-        starPlanned: s.starPlanned, starDone: s.starDone,
-        closed: false, note: lg?.note ?? null, mood: lg?.mood ?? null,
-      });
+      continue;
     }
+    const w = dayWindow(d);
+    const events = byDay?.get(d) ?? expand(loaded, w.start, w.end);
+    const tasks = [...(tasksByDate.get(d)?.values() ?? [])];
+    const stars = tasks.filter(t => t.star_date === d);
+    out.push({
+      date: d,
+      planned: events.length + tasks.length,
+      done: events.filter(e => e.done).length + tasks.filter(t => t.done).length,
+      starPlanned: stars.length,
+      starDone: stars.filter(t => t.done).length,
+      closed: false, note: lg?.note ?? null, mood: lg?.mood ?? null,
+    });
   }
   return out;
 }

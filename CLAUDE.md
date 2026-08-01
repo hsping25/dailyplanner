@@ -86,7 +86,16 @@
 - planner_user(아이디), view(list|blocks|memo|timer), theme(auto|light|dark).
 - 타이머: timer_mode(simple|pomo), timer_min/timer_sec(일반), timer_focus/timer_break(포모도로).
 - 테마: html[data-theme]로 시스템 설정 덮어씀. CSS는 :root(라이트)/[data-theme=dark]/media(:not([data-theme]))로 3분기.
-- 클라이언트 렌더는 loadDay(date)로 재렌더(위임 핸들러는 1회만 부착). /api/day 가 그날 데이터 + 그 주(week, 이벤트 full) 반환.
+- 클라이언트 렌더는 loadDay(date)로 재렌더(위임 핸들러는 1회만 부착). /api/day 가 그날 데이터 + 그 주(week, 이벤트 full) + scores/log/streak/goals 반환.
+  화살표 연타로 요청이 겹치면 **마지막 것만 반영**(loadSeq)하고, 체크박스 뒤의 성적 갱신은 0.4초 디바운스.
+
+## 속도 규칙 — DB 왕복을 세라
+배포는 Neon Postgres(원격)라 **쿼리 하나가 곧 왕복 지연**이다. `await`를 줄줄이 세우면 그만큼 곱해진다.
+- **하루씩 반복 조회 금지.** 주간 성적은 `tasksByDateInRange`로 구간을 한 번에 읽고 메모리에서 날짜별로 나눈다(예전엔 7일 × 1쿼리였고, 날짜 이동이 눈에 띄게 느려졌다).
+- **서로 의존 없는 조회는 `Promise.all`.** `/api/day`는 loadEvents(내부 3쿼리 병렬) → 나머지 6쿼리를 한 번에 던진다.
+- **펼치기(expand)는 주당 1회.** `expandWeek(loaded, monday)`가 만든 date→일정 Map을 그날 목록·주간 점·주간 성적이 함께 쓴다.
+- 기준값(왕복 40ms 가정, 할일 12 + 일정 9): `/api/day` **128ms / 쿼리 10회**. 하루씩 조회하던 판은 757ms / 17회였다.
+  잴 때는 db.js 사본에 지연을 주입해 재고, **원본은 건드리지 않는다**.
 - 가로 모드: body max-width 720px, 시간표 열 넓힘 (@media orientation:landscape).
 
 ## 진행 단계

@@ -40,9 +40,13 @@ export function dayWindow(date) {
 
 // 사용자의 이벤트 + 예외 + 완료체크를 한 번에 로드 (여러 날짜 창에 재사용해 DB 조회 절약)
 export async function loadEvents(user = "기본") {
-  const events = await all('SELECT * FROM events WHERE "user" = ?', [user]);
-  const exceptions = await all("SELECT * FROM event_exceptions", []);
-  const dones = await all("SELECT event_id, date FROM event_done", []);
+  // 세 쿼리는 서로 의존하지 않으므로 동시에 던진다. Postgres(Neon)에선 왕복 하나가 곧 지연이라
+  // 순차로 await하면 3배로 기다리게 된다.
+  const [events, exceptions, dones] = await Promise.all([
+    all('SELECT * FROM events WHERE "user" = ?', [user]),
+    all("SELECT * FROM event_exceptions", []),
+    all("SELECT event_id, date FROM event_done", []),
+  ]);
   const byEvent = new Map();
   for (const x of exceptions) {
     if (!byEvent.has(x.event_id)) byEvent.set(x.event_id, []);
