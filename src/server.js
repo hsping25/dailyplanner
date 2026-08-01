@@ -3,7 +3,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { get, all, run, insert, initDb } from "./db.js";
 import { parseText } from "./parse.js";
-import { pad, todayStr, shiftDate, dayWindow, eventsInWindow, loadEvents, expand } from "./day.js";
+import { todayStr, shiftDate, weekStart, nowStamp, dayWindow, eventsInWindow, loadEvents, expand } from "./day.js";
+import { dayScore, closeDay, dayLog, scoresBetween, streak, tasksForDate } from "./review.js";
 import { startNotifier } from "./notify.js";
 import { startSchedules } from "./schedule.js";
 import { getBotUsername } from "./telegram.js";
@@ -41,11 +42,86 @@ app.get("/api/day", ah(async (req, res) => {
 
   const loaded = await loadEvents(user);        // 이벤트는 한 번만 로드해 아래에서 재사용
   const events = expand(loaded, start, end);
+  // 버린 것(archived)은 안 보인다. 핵심(star_date)은 마감이 없어도 그날 목록에 올라온다.
   const tasks = await all(
-    'SELECT * FROM tasks WHERE "user" = ? AND (done = 0 OR due = ?) ORDER BY due IS NULL, due, id',
-    [user, date]);
+    `SELECT * FROM tasks WHERE "user" = ? AND archived = 0
+       AND (done = 0 OR due = ? OR star_date = ?)
+     ORDER BY CASE WHEN star_date = ? THEN 0 ELSE 1 END, due IS NULL, due, id`,
+    [user, date, date, date]);
 
-  res.json({ date, events, tasks, week: await weekFor(date, user, loaded) });
+  const monday = weekStart(date);
+  res.json({
+    date, events, tasks,
+    week: await weekFor(date, user, loaded),
+    scores: await scoresBetween(user, monday, shiftDate(monday, 6), loaded),
+    log: await dayLog(user, date),
+    streak: await streak(user),
+    goals: await all('SELECT * FROM goals WHERE "user" = ? AND week = ? ORDER BY id', [user, monday]),
+  });
+}));
+
+// ── 하루 닫기(회고) ──
+app.get("/api/review", ah(async (req, res) => {
+  const user = userOf(req);
+  const date = req.query.date || todayStr();
+  const s = await dayScore(user, date);
+  res.json({
+    date, planned: s.planned, done: s.done, starPlanned: s.starPlanned, starDone: s.starDone,
+    events: s.events, tasks: s.tasks,
+    log: await dayLog(user, date),
+    streak: await streak(user),
+  });
+}));
+
+app.post("/api/review", ah(async (req, res) => {
+  const user = userOf(req);
+  const { date = todayStr(), note = null, mood = null, actions = [] } = req.body ?? {};
+  const s = await closeDay(user, date, {
+    note: typeof note === "string" && note.trim() ? note.trim() : null,
+    mood: mood == null ? null : Math.max(1, Math.min(5, Number(mood))),
+    actions: Array.isArray(actions) ? actions : [],
+  });
+  res.json({ ok: true, planned: s.planned, done: s.done, streak: await streak(user) });
+}));
+
+// 임의 구간 성적 (기본: 이번 주)
+app.get("/api/scores", ah(async (req, res) => {
+  const user = userOf(req);
+  const to = req.query.to || todayStr();
+  const from = req.query.from || weekStart(to);
+  res.json({ scores: await scoresBetween(user, from, to), streak: await streak(user) });
+}));
+
+// ── 주간 목표 (한 주 최대 3개) ──
+app.get("/api/goals", ah(async (req, res) => {
+  const week = weekStart(req.query.date || todayStr());
+  res.json({ week, goals: await all('SELECT * FROM goals WHERE "user" = ? AND week = ? ORDER BY id', [userOf(req), week]) });
+}));
+
+app.post("/api/goals", ah(async (req, res) => {
+  const user = userOf(req);
+  const { title, date = todayStr() } = req.body ?? {};
+  if (!title?.trim()) return res.status(400).json({ error: "title은 필수" });
+  const week = weekStart(date);
+  const n = Number((await get('SELECT COUNT(*) AS c FROM goals WHERE "user" = ? AND week = ?', [user, week]))?.c ?? 0);
+  if (n >= 3) return res.status(400).json({ error: "이번 주 목표는 3개까지예요" });
+  res.json({ id: await insert('INSERT INTO goals ("user", week, title) VALUES (?, ?, ?)', [user, week, title.trim()]) });
+}));
+
+app.patch("/api/goals/:id", ah(async (req, res) => {
+  const user = userOf(req);
+  const cur = await get('SELECT * FROM goals WHERE id = ? AND "user" = ?', [req.params.id, user]);
+  if (!cur) return res.status(404).json({ error: "없는 목표" });
+  await run('UPDATE goals SET title = ?, done = ? WHERE id = ? AND "user" = ?', [
+    req.body?.title?.trim() || cur.title,
+    "done" in (req.body ?? {}) ? (req.body.done ? 1 : 0) : cur.done,
+    req.params.id, user]);
+  res.json({ ok: true });
+}));
+
+app.delete("/api/goals/:id", ah(async (req, res) => {
+  await run('DELETE FROM goals WHERE id = ? AND "user" = ?', [req.params.id, userOf(req)]);
+  res.json({ ok: true });
 }));
 
 // date가 속한 주(월~일)의 요일별 일정 + 안 끝난 할 일 목록 (점 개수와 팝업에 사용)
@@ -195,12 +271,51 @@ app.patch("/api/tasks/:id", ah(async (req, res) => {
   const user = userOf(req);
   const cur = await get('SELECT * FROM tasks WHERE id = ? AND "user" = ?', [req.params.id, user]);
   if (!cur) return res.status(404).json({ error: "없는 할 일" });
-  const title = req.body.title ?? cur.title;
-  const due = "due" in req.body ? req.body.due : cur.due;
-  const done = "done" in req.body ? (req.body.done ? 1 : 0) : cur.done;
-  await run('UPDATE tasks SET title = ?, due = ?, done = ? WHERE id = ? AND "user" = ?',
-    [title, due, done, req.params.id, user]);
+  const b = req.body ?? {};
+  const title = b.title ?? cur.title;
+  const due = "due" in b ? b.due : cur.due;
+  const done = "done" in b ? (b.done ? 1 : 0) : cur.done;
+  const planAt = "plan_at" in b ? (b.plan_at || null) : cur.plan_at;
+  const archived = "archived" in b ? (b.archived ? 1 : 0) : cur.archived;
+  // 완료로 바뀌는 순간의 시각을 남긴다(되돌리면 지운다) — 나중에 "언제 해냈나"를 볼 수 있게
+  const doneAt = done ? (cur.done ? cur.done_at : nowStamp()) : null;
+  await run(`UPDATE tasks SET title = ?, due = ?, done = ?, done_at = ?, plan_at = ?, archived = ?
+    WHERE id = ? AND "user" = ?`,
+    [title, due, done, doneAt, planAt, archived, req.params.id, user]);
   res.json({ ok: true });
+}));
+
+// 오늘의 핵심 3개 지정/해제. body: { date, star }  — 3개를 넘기면 거절한다(제한이 우선순위를 만든다)
+app.post("/api/tasks/:id/star", ah(async (req, res) => {
+  const user = userOf(req);
+  const { date = todayStr(), star = true } = req.body ?? {};
+  const cur = await get('SELECT * FROM tasks WHERE id = ? AND "user" = ?', [req.params.id, user]);
+  if (!cur) return res.status(404).json({ error: "없는 할 일" });
+  if (star) {
+    const n = Number((await get(
+      'SELECT COUNT(*) AS c FROM tasks WHERE "user" = ? AND archived = 0 AND star_date = ? AND id <> ?',
+      [user, date, req.params.id]))?.c ?? 0);
+    if (n >= 3) return res.status(400).json({ error: "핵심은 3개까지예요. 하나를 빼고 다시 골라 보세요." });
+  }
+  await run('UPDATE tasks SET star_date = ? WHERE id = ? AND "user" = ?',
+    [star ? date : null, req.params.id, user]);
+  res.json({ ok: true });
+}));
+
+// 타이머로 집중한 시간 누적. body: { minutes }
+app.post("/api/tasks/:id/focus", ah(async (req, res) => {
+  const user = userOf(req);
+  const min = Math.max(0, Math.round(Number(req.body?.minutes) || 0));
+  const r = await run('UPDATE tasks SET spent_min = spent_min + ? WHERE id = ? AND "user" = ?',
+    [min, req.params.id, user]);
+  if (r.changes === 0) return res.status(404).json({ error: "없는 할 일" });
+  res.json({ ok: true });
+}));
+
+// 보관함 (버린 할 일 되살리기용)
+app.get("/api/tasks/archived", ah(async (req, res) => {
+  res.json({ tasks: await all(
+    'SELECT * FROM tasks WHERE "user" = ? AND archived = 1 ORDER BY id DESC LIMIT 100', [userOf(req)]) });
 }));
 
 app.delete("/api/tasks/:id", ah(async (req, res) => {
@@ -208,13 +323,7 @@ app.delete("/api/tasks/:id", ah(async (req, res) => {
   res.json({ ok: true });
 }));
 
-// ── 메모장 CRUD ──
-// 지금 시각을 저장 형식("YYYY-MM-DDTHH:MM")으로 (최근 수정순 정렬용)
-const nowStamp = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-};
-
+// ── 메모장 CRUD ── (updated 정렬에 day.js의 nowStamp 사용)
 app.get("/api/memos", ah(async (req, res) => {
   const memos = await all(
     'SELECT * FROM memos WHERE "user" = ? ORDER BY updated DESC, id DESC', [userOf(req)]);

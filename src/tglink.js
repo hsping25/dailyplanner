@@ -1,6 +1,7 @@
 // 아이디 ↔ 텔레그램 연결. 딥링크(t.me/<봇>?start=<코드>)로 사용자가 "시작"만 누르면 연결됨.
 import { get, all, run } from "./db.js";
 import { sendTelegram, getUpdatesRaw } from "./telegram.js";
+import { handleCallback, handleText } from "./evening.js";
 
 // ── 매핑 조회/변경 ──
 export async function chatIdFor(user) {
@@ -52,9 +53,20 @@ async function pollOnce() {
     let maxId = offset - 1;
     for (const u of ups) {
       if (u.update_id > maxId) maxId = u.update_id;
+
+      // 인라인 버튼 탭 (하루 닫기 / 밀린 할 일 정리)
+      if (u.callback_query) {
+        try { await handleCallback(u.callback_query); } catch (e) { console.error("버튼 처리 실패:", e.message); }
+        continue;
+      }
+
       const text = (u.message?.text || "").trim();
       const chat = u.message?.chat?.id;
       if (chat == null) continue;
+
+      // 회고 한 줄 답장이면 여기서 소비
+      try { if (text && await handleText(chat, text)) continue; } catch (e) { console.error("회고 저장 실패:", e.message); }
+
       const m = text.match(/^\/start\s+(\S+)$/) || (/^[a-z0-9]{4,12}$/i.test(text) ? [text, text] : null);
       if (!m) continue;
       const row = await get('SELECT "user" FROM tg_link WHERE code = ?', [m[1]]);

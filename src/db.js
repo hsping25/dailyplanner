@@ -41,6 +41,11 @@ export async function insert(sql, params = []) {
   return Number(sqlite.prepare(sql).run(...params).lastInsertRowid);
 }
 
+// 기존 DB에 칸 추가 (이미 있으면 에러 → 무시). 두 DB 모두 ADD COLUMN 문법은 같다.
+async function addColumn(table, col, type) {
+  await run(`ALTER TABLE ${table} ADD COLUMN ${col} ${type}`).catch(() => {});
+}
+
 // 스키마 생성 (두 DB 공통; id 자동증가만 방언이 다름)
 export async function initDb() {
   const AUTO = usePg ? "SERIAL PRIMARY KEY" : "INTEGER PRIMARY KEY AUTOINCREMENT";
@@ -77,6 +82,37 @@ export async function initDb() {
     "user" TEXT NOT NULL DEFAULT '기본',
     title TEXT NOT NULL,
     due TEXT,
+    done INTEGER NOT NULL DEFAULT 0
+  )`);
+  // 실행 장치용 칸들. star_date = "이 날의 핵심 3개"로 뽑힌 날짜(하루 단위, 없으면 평범한 할 일).
+  // plan_at = "언제 할지" 정해둔 시각("YYYY-MM-DDTHH:MM", 일정이 아니라 계획), spent_min = 타이머 누적 집중 분,
+  // archived = 하루 닫기에서 버린 것(지우지 않고 숨김), asked_at = 밀린 할 일을 언제 물어봤나(중복 질문 방지).
+  await addColumn("tasks", "star_date", "TEXT");
+  await addColumn("tasks", "plan_at", "TEXT");
+  await addColumn("tasks", "done_at", "TEXT");
+  await addColumn("tasks", "spent_min", "INTEGER NOT NULL DEFAULT 0");
+  await addColumn("tasks", "archived", "INTEGER NOT NULL DEFAULT 0");
+  await addColumn("tasks", "asked_at", "TEXT");
+  // 하루 닫기 기록. planned/done은 닫는 순간의 스냅샷(나중에 할 일을 지워도 그날 성적은 남는다).
+  // note = 스스로 쓴 회고 한 줄, mood = 하루 점수 1~5.
+  await run(`CREATE TABLE IF NOT EXISTS day_log (
+    "user" TEXT NOT NULL,
+    date TEXT NOT NULL,
+    planned INTEGER NOT NULL DEFAULT 0,
+    done INTEGER NOT NULL DEFAULT 0,
+    star_planned INTEGER NOT NULL DEFAULT 0,
+    star_done INTEGER NOT NULL DEFAULT 0,
+    note TEXT,
+    mood INTEGER,
+    closed_at TEXT,
+    PRIMARY KEY ("user", date)
+  )`);
+  // 주간 목표: week = 그 주 월요일 날짜("YYYY-MM-DD"). 한 주에 최대 3개.
+  await run(`CREATE TABLE IF NOT EXISTS goals (
+    id ${AUTO},
+    "user" TEXT NOT NULL DEFAULT '기본',
+    week TEXT NOT NULL,
+    title TEXT NOT NULL,
     done INTEGER NOT NULL DEFAULT 0
   )`);
   // 메모장: 자유 메모. kind='text'면 content는 글, 'draw'면 PNG 데이터 URL(손그림).

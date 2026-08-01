@@ -8,9 +8,14 @@ import { sendTelegram } from "./telegram.js";
 // 남은 할 일 안내 문구 (없으면 null)
 export async function composeReminder(user) {
   const date = todayStr();
-  const tasks = await all('SELECT title FROM tasks WHERE "user" = ? AND done = 0 AND due = ?', [user, date]);
+  // 오늘 마감 + 오늘 핵심으로 뽑아 둔 것 (핵심은 마감이 없어도 오후에 한 번 되새긴다)
+  const tasks = await all(
+    `SELECT title, star_date FROM tasks WHERE "user" = ? AND archived = 0 AND done = 0
+       AND (due = ? OR star_date = ?) ORDER BY CASE WHEN star_date = ? THEN 0 ELSE 1 END, id`,
+    [user, date, date, date]);
   if (tasks.length === 0) return null;
-  return `📌 오늘까지 할 일 ${tasks.length}개 남았어요 — ${tasks.map(t => t.title).join(" · ")}`;
+  const label = t => (t.star_date === date ? `⭐${t.title}` : t.title);
+  return `📌 아직 ${tasks.length}개 남았어요 — ${tasks.map(label).join(" · ")}`;
 }
 
 // 특정 아이디의 리마인드를 그 사람 chat_id로 전송

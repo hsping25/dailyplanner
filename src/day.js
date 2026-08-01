@@ -14,6 +14,18 @@ export function todayStr() {
   return dateStr(now);
 }
 
+// 지금 시각을 저장 형식("YYYY-MM-DDTHH:MM")으로
+export function nowStamp() {
+  const d = new Date();
+  return `${dateStr(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+// date가 속한 주의 월요일 (주간 목표의 키)
+export function weekStart(date) {
+  const [y, m, d] = date.split("-").map(Number);
+  return shiftDate(date, -((new Date(y, m - 1, d).getDay() + 6) % 7));
+}
+
 export function shiftDate(date, days) {
   const [y, m, d] = date.split("-").map(Number);
   return dateStr(new Date(y, m - 1, d + days));

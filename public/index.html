@@ -187,6 +187,12 @@
   }
   .block.past { opacity: 0.35; }
   .block.done { opacity: 0.4; }
+  /* 할 일의 "언제 할지" 계획 — 확정된 일정이 아니므로 점선 + 속이 빈 블록 */
+  .block.plan {
+    background: none;
+    border: 1.5px dashed var(--accent);
+    color: var(--accent);
+  }
   .block.done .name { text-decoration: line-through; }
   .wt-block.done { opacity: 0.45; text-decoration: line-through; }
   .now-line {
@@ -325,6 +331,134 @@
     flex-shrink: 0;
   }
   .task.overdue .due { color: var(--warn); font-weight: 700; }
+  .task .name { flex: 1; min-width: 0; }
+  /* 별(핵심 지정) / ▶(타이머) — 평소엔 흐리게 두고 누를 수 있는 크기만 확보 */
+  .task .star, .task .play {
+    flex-shrink: 0;
+    width: 32px; height: 32px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 17px;
+    opacity: 0.28;
+    cursor: pointer;
+    user-select: none;
+  }
+  .task .star.on { opacity: 1; }
+  .task.done .star, .task.done .play { opacity: 0.15; }
+  .task .plan {
+    flex-shrink: 0;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ── 오늘 핵심 3개 ── */
+  .focus3 { margin-bottom: 28px; }
+  .focus3 .slots { display: flex; flex-direction: column; gap: 8px; }
+  .f3 {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--card);
+    border-radius: 14px;
+    padding: 14px 16px;
+    min-height: 56px;
+  }
+  .f3 .box {
+    width: 26px; height: 26px;
+    border: 2.5px solid var(--accent);
+    border-radius: 8px;
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 17px;
+    cursor: pointer;
+  }
+  .f3 .name { font-size: 19px; font-weight: 700; flex: 1; min-width: 0; }
+  .f3 .plan { font-size: 13px; font-weight: 700; color: var(--accent); flex-shrink: 0; }
+  .f3 .play { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; opacity: 0.35; cursor: pointer; }
+  .f3.done .box { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+  .f3.done .name { color: var(--ink-dim); text-decoration: line-through; font-weight: 500; }
+  .f3.empty-slot {
+    border: 1.5px dashed var(--line);
+    background: none;
+    color: var(--ink-dim);
+    font-size: 15px;
+    justify-content: center;
+  }
+
+  /* ── 하루 성적 바 (히어로 아래) ── */
+  .dayscore {
+    display: flex; align-items: center; gap: 12px;
+    margin: -8px 0 24px;
+    padding: 12px 16px;
+    background: var(--card);
+    border-radius: 14px;
+  }
+  .dayscore .bar {
+    flex: 1; height: 8px;
+    background: var(--line);
+    border-radius: 99px;
+    overflow: hidden;
+  }
+  .dayscore .bar i { display: block; height: 100%; background: var(--accent); border-radius: 99px; }
+  .dayscore .num { font-size: 14px; font-weight: 700; color: var(--ink-dim); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+  .dayscore .streak { font-size: 14px; font-weight: 700; flex-shrink: 0; }
+  .dayscore button {
+    flex-shrink: 0;
+    border: none; border-radius: 10px;
+    background: var(--accent); color: #fff;
+    font-size: 14px; font-weight: 700;
+    padding: 8px 12px;
+    cursor: pointer;
+  }
+  .dayscore button.closed { background: var(--line); color: var(--ink-dim); }
+  .dayscore .note { font-size: 14px; color: var(--ink-dim); flex: 1; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* ── 하루 닫기 시트 ── */
+  .rv-head { font-size: 15px; color: var(--ink-dim); margin-bottom: 14px; }
+  .rv-head b { color: var(--ink); font-size: 22px; }
+  .rv-item { padding: 12px 0; border-bottom: 1px solid var(--line); }
+  .rv-item .t { font-size: 17px; font-weight: 700; margin-bottom: 8px; }
+  .rv-item .t .star { color: var(--accent); }
+  .rv-acts { display: flex; gap: 6px; flex-wrap: wrap; }
+  .rv-acts button {
+    border: 1.5px solid var(--line);
+    background: none; color: var(--ink-dim);
+    border-radius: 999px;
+    font-size: 14px; font-weight: 600;
+    padding: 7px 12px;
+    cursor: pointer;
+  }
+  .rv-acts button.on { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+  .rv-acts button.drop.on { border-color: var(--warn); color: var(--warn); background: color-mix(in srgb, var(--warn) 12%, transparent); }
+  .rv-note { width: 100%; box-sizing: border-box; margin-top: 14px;
+    border: 1.5px solid var(--line); border-radius: 12px; background: var(--card);
+    color: var(--ink); font: inherit; font-size: 16px; padding: 12px; min-height: 76px; resize: vertical; }
+  .rv-moods { display: flex; justify-content: space-between; gap: 6px; margin-top: 12px; }
+  .rv-moods button {
+    flex: 1; border: 1.5px solid var(--line); background: none;
+    border-radius: 12px; font-size: 24px; padding: 8px 0; cursor: pointer; opacity: 0.45;
+  }
+  .rv-moods button.on { opacity: 1; border-color: var(--accent); }
+
+  /* ── 주간 목표 ── */
+  .goals { display: flex; flex-direction: column; gap: 8px; }
+  .goal {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--card); border-radius: 12px; padding: 12px 14px; min-height: 48px;
+  }
+  .goal .box {
+    width: 22px; height: 22px; flex-shrink: 0;
+    border: 2.5px solid var(--accent2); border-radius: 7px;
+    display: flex; align-items: center; justify-content: center; font-size: 15px; cursor: pointer;
+  }
+  .goal .name { font-size: 17px; font-weight: 700; flex: 1; min-width: 0; }
+  .goal .x { opacity: 0.3; cursor: pointer; padding: 0 4px; flex-shrink: 0; }
+  .goal.done .box { background: var(--accent2); border-color: var(--accent2); color: var(--bg); }
+  .goal.done .name { color: var(--ink-dim); text-decoration: line-through; font-weight: 500; }
+  .goal-add {
+    border: 1.5px dashed var(--line); background: none; color: var(--ink-dim);
+    border-radius: 12px; padding: 12px; font: inherit; font-size: 15px; cursor: pointer; width: 100%;
+  }
 
   /* ── 이번 주 점 ── */
   .week-head {
@@ -392,6 +526,18 @@
     background: transparent;
     border-color: var(--ink-dim);
   }
+  /* 그날 달성률 고리 — 종이 플래너를 넘겨볼 때처럼 "해낸 날"이 눈에 쌓이게 */
+  .day .ring {
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    border: 2.5px solid var(--line);
+    box-sizing: border-box;
+    background:
+      conic-gradient(var(--accent) calc(var(--pct) * 1%), transparent 0);
+  }
+  .day .ring.none { background: none; }
+  .day .ring.full { border-color: var(--accent); }
+  .day .ring.closed { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 28%, transparent); }
 
   /* ── 하단 채팅 입력바 ── */
   .chat-bar {
@@ -944,6 +1090,14 @@
     margin-bottom: 8px;
   }
   .tm-phase.break { color: var(--accent); }
+  /* 무엇에 대한 집중인지 — 타이머가 할 일과 이어져 있을 때만 보인다 */
+  .tm-target {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    background: var(--card); border-radius: 12px;
+    padding: 12px 14px; margin-bottom: 16px;
+  }
+  .tm-target .name { font-size: 17px; font-weight: 700; }
+  .tm-target .x { opacity: 0.4; cursor: pointer; font-size: 18px; }
   .tm-time {
     font-size: 68px;
     font-weight: 800;
@@ -1003,8 +1157,17 @@
 </div>
 
 <div class="next" id="next-event"></div>
+<div class="dayscore" id="dayscore" hidden></div>
 
 <div id="view-list">
+  <section class="focus3" id="focus3">
+    <div class="week-head">
+      <h2>오늘 핵심</h2>
+      <span class="week-hint">할 일의 ☆를 눌러 세 개까지</span>
+    </div>
+    <div class="slots" id="focus3-slots"></div>
+  </section>
+
   <section>
     <h2>오늘 일정</h2>
     <div id="events"></div>
@@ -1028,6 +1191,14 @@
 </div>
 
 <div id="view-blocks">
+  <section>
+    <div class="week-head">
+      <h2>이번 주 목표</h2>
+      <span class="week-hint">최대 3개</span>
+    </div>
+    <div class="goals" id="goals"></div>
+  </section>
+
   <section>
     <div class="week-head">
       <h2 id="wt-title">시간표</h2>
@@ -1090,6 +1261,8 @@
         <label>휴식(분) <input type="number" id="tm-break" inputmode="numeric" min="1" max="60" value="5"></label>
       </div>
     </div>
+
+    <div class="tm-target" id="tm-target" hidden></div>
 
     <div class="tm-display">
       <div class="tm-phase" id="tm-phase" hidden></div>
@@ -1190,13 +1363,19 @@ const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(
 const todayStr = data.date;        // 서버 기준 논리적 오늘(새벽 4시 경계)
 let viewDate = data.date;
 let events = [], tasks = [], weekData = [], taskById = new Map();
+let scores = [], dayLogRow = null, streakN = 0, goals = [];
 
 function applyData(d) {
   viewDate = d.date;
   events = d.events.map(e => ({ ...e, start: new Date(e.start), end: new Date(e.end) }));
-  tasks = d.tasks.map(t => ({ ...t, done: !!t.done, due: t.due ? new Date(t.due + "T23:59:59") : null }));
+  // dueDate = Date 객체(비교용), due = 원본 문자열(수정 화면·서버 전송용)
+  tasks = d.tasks.map(t => ({ ...t, done: !!t.done, dueDate: t.due ? new Date(t.due + "T23:59:59") : null }));
   weekData = d.week;
   taskById = new Map(d.tasks.map(t => [t.id, t]));
+  scores = d.scores ?? [];
+  dayLogRow = d.log ?? null;
+  streakN = d.streak ?? 0;
+  goals = d.goals ?? [];
 }
 async function loadDay(ds) {
   const d = await (await apiFetch("/api/day?date=" + ds)).json();
@@ -1244,7 +1423,8 @@ async function openTelegramSheet() {
   if (st.linked) {
     showSheet(`<div class="sheet-title">텔레그램 알림</div>
       <div class="fld-note">✅ '${esc(USER)}' 아이디 연결됨</div>
-      <div class="cp-help">아침 7시 브리핑 · 오후 2시 할 일 · 일정 10분 전 알림이 이 텔레그램으로 와요.</div>
+      <div class="cp-help">아침 7시 브리핑 · 오후 2시 할 일 · 일정 10분 전 알림 · <b>밤 9시 하루 닫기</b>가 이 텔레그램으로 와요.<br>
+        밤 9시 메시지의 버튼만 눌러도 남은 할 일 정리와 회고가 끝나요.</div>
       <div class="sheet-btns">
         <button class="del" id="tg-unlink">연결 해제</button>
         <button class="no" id="tg-close">닫기</button>
@@ -1339,20 +1519,72 @@ function renderEvents() {
   }).join("");
 }
 
+// plan_at("YYYY-MM-DDTHH:MM") → "14:30" (그날이 아니면 날짜까지)
+function planLabel(t) {
+  if (!t.plan_at) return "";
+  const hm = t.plan_at.slice(11, 16);
+  return t.plan_at.slice(0, 10) === viewDate ? hm : `${Number(t.plan_at.slice(5, 7))}/${Number(t.plan_at.slice(8, 10))} ${hm}`;
+}
+
 function renderTasks() {
   const startOfToday = dateObj(todayStr);
   const endOfToday = new Date(startOfToday); endOfToday.setDate(endOfToday.getDate() + 1);
   const html = tasks.map(t => {
-    const overdue = !t.done && t.due && t.due < startOfToday;
+    const overdue = !t.done && t.dueDate && t.dueDate < startOfToday;
+    const starred = t.star_date === viewDate;
     const cls = ["task", t.done ? "done" : "", overdue ? "overdue" : ""].join(" ");
     let due = "";
-    if (overdue) { const days = Math.ceil((startOfToday - t.due) / 86400000); due = `${days}일 지남`; }
-    else if (t.due && !t.done) due = t.due < endOfToday ? "오늘까지" : `${t.due.getMonth() + 1}/${t.due.getDate()}까지`;
+    if (overdue) { const days = Math.ceil((startOfToday - t.dueDate) / 86400000); due = `${days}일 지남`; }
+    else if (t.dueDate && !t.done) due = t.dueDate < endOfToday ? "오늘까지" : `${t.dueDate.getMonth() + 1}/${t.dueDate.getDate()}까지`;
+    const plan = planLabel(t);
     return `<div class="${cls}" data-id="${t.id}" data-done="${t.done ? 1 : 0}">
       <div class="box">${t.done ? "✓" : ""}</div><div class="name">${esc(t.title)}</div>
-      ${due ? `<div class="due">${due}</div>` : ""}</div>`;
+      ${plan ? `<div class="plan">${esc(plan)}</div>` : ""}
+      ${due ? `<div class="due">${due}</div>` : ""}
+      ${t.done ? "" : `<div class="play" title="이 할 일로 타이머">▶</div>`}
+      <div class="star${starred ? " on" : ""}" data-star="${starred ? 1 : 0}" title="오늘 핵심으로">${starred ? "★" : "☆"}</div>
+    </div>`;
   }).join("");
   tasksEl.innerHTML = html || `<div class="empty">할 일이 없어요</div>`;
+}
+
+// ── 오늘 핵심 3개 ── 빈 칸을 남겨 두는 게 핵심: "아직 안 정했다"가 눈에 보여야 정하게 된다.
+const focus3El = document.getElementById("focus3");
+const focus3SlotsEl = document.getElementById("focus3-slots");
+function renderFocus3() {
+  const stars = tasks.filter(t => t.star_date === viewDate);
+  // 지난 날에 아무것도 안 골랐으면 빈 칸 세 개를 보여줄 이유가 없다
+  focus3El.style.display = (!stars.length && viewDate < todayStr) ? "none" : "";
+  const filled = stars.map(t => {
+    const plan = planLabel(t);
+    return `<div class="f3${t.done ? " done" : ""}" data-id="${t.id}" data-done="${t.done ? 1 : 0}">
+      <div class="box">${t.done ? "✓" : ""}</div><div class="name">${esc(t.title)}</div>
+      ${plan ? `<div class="plan">${esc(plan)}</div>` : ""}
+      ${t.done ? "" : `<div class="play" title="이 할 일로 타이머">▶</div>`}
+    </div>`;
+  });
+  const empties = Array.from({ length: Math.max(0, 3 - stars.length) },
+    () => `<div class="f3 empty-slot">비어 있음</div>`);
+  focus3SlotsEl.innerHTML = [...filled, ...empties].join("");
+}
+
+// ── 하루 성적 바 ── 지금 몇 개 중 몇 개인지 + 하루 닫기 버튼
+const dayScoreEl = document.getElementById("dayscore");
+const goalsEl = document.getElementById("goals");   // 이번 주 목표 (렌더 함수는 아래 시트 절에)
+function scoreOf(date) { return scores.find(s => s.date === date) ?? null; }
+function renderDayScore() {
+  const s = scoreOf(viewDate);
+  const closed = !!dayLogRow?.closed_at;
+  if (!s || (s.planned === 0 && !closed)) { dayScoreEl.hidden = true; return; }
+  dayScoreEl.hidden = false;
+  const pct = s.planned ? Math.round((s.done / s.planned) * 100) : 0;
+  const note = closed && dayLogRow.note ? `<div class="note">“${esc(dayLogRow.note)}”</div>` : "";
+  dayScoreEl.innerHTML = `
+    <div class="num">${s.done}/${s.planned}</div>
+    ${note || `<div class="bar"><i style="width:${pct}%"></i></div>`}
+    ${streakN >= 2 && viewDate === todayStr ? `<div class="streak">🔥${streakN}</div>` : ""}
+    <button id="close-day" class="${closed ? "closed" : ""}">${closed ? "다시 닫기" : "하루 닫기"}</button>`;
+  document.getElementById("close-day").onclick = openCloseDay;
 }
 
 // ── 주간 시간표 (블록 모드) — 오전 6시 ~ 다음날 오전 4시, 7일 한눈에 ──
@@ -1432,6 +1664,14 @@ function renderDayTimeline() {
     html += `<div class="${cls}" data-id="${e.eventId}" data-date="${e.occurrenceDate}" style="top:${top}px;height:${height}px">
       <span class="name">${esc(e.title)}</span><span class="t">${fmtTime(e.start)}–${fmtTime(e.end)}</span></div>`;
   }
+  // "언제 할지" 정해 둔 할 일 — 일정이 아니라 계획이므로 점선 블록으로 옅게 (기본 30분)
+  for (const t of tasks) {
+    if (!t.plan_at || t.plan_at.slice(0, 10) !== viewDate) continue;
+    const s = new Date(t.plan_at);
+    const top = Math.max(0, yOf(s));
+    html += `<div class="block plan${t.done ? " done" : ""}" data-task="${t.id}" style="top:${top}px;height:${DAY_TL_HOUR / 2 - 3}px">
+      <span class="name">${esc(t.title)}</span><span class="t">${fmtTime(s)}</span></div>`;
+  }
   html += `</div>`;
   if (viewDate === todayStr) {
     const y = yOf(now);
@@ -1441,7 +1681,8 @@ function renderDayTimeline() {
 }
 dayTlEl.addEventListener("click", ev => {
   const b = ev.target.closest(".block");
-  if (b?.dataset.id) openEventEditor(Number(b.dataset.id), b.dataset.date);
+  if (b?.dataset.task) openTaskEditor(taskById.get(Number(b.dataset.task)));
+  else if (b?.dataset.id) openEventEditor(Number(b.dataset.id), b.dataset.date);
 });
 dayAlldayEl.addEventListener("click", ev => {
   const b = ev.target.closest(".ad-block");
@@ -1497,12 +1738,15 @@ function showWtPop(block) {
 function renderAll() {
   renderDateNav();
   renderHero();
+  renderDayScore();
+  renderFocus3();
   renderEvents();
   renderTasks();
   renderDayTimeline();
   renderTimeline();
   updateWtTitle();
   renderWeekStrip();
+  renderGoals();
 }
 
 // ── 위임 핸들러 (한 번만 붙임; innerHTML이 바뀌어도 유지됨) ──
@@ -1520,30 +1764,70 @@ eventsEl.addEventListener("click", ev => {
     apiFetch(`/api/events/${row.dataset.id}/done`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ date: row.dataset.date, done: willDone }),
-    }).catch(() => {});
+    }).then(() => refreshScores()).catch(() => {});
   } else {
     openEventEditor(Number(row.dataset.id), row.dataset.date);
   }
 });
+// 할 일 완료 토글 (낙관적: 화면 즉시 반영, 서버는 백그라운드 → 렉 체감 제거)
+function toggleTaskDone(row, id) {
+  const willDone = row.dataset.done !== "1";
+  row.dataset.done = willDone ? "1" : "0";
+  row.classList.toggle("done", willDone);
+  const box = row.querySelector(".box");
+  if (box) box.textContent = willDone ? "✓" : "";
+  const t = taskById.get(id);
+  if (t) t.done = willDone ? 1 : 0;
+  const lt = tasks.find(x => x.id === id);
+  if (lt) lt.done = willDone;
+  apiFetch(`/api/tasks/${id}`, {
+    method: "PATCH", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ done: willDone }),
+  }).then(() => refreshScores()).catch(() => {});
+  renderFocus3();
+}
+
+// 오늘 핵심 지정/해제. 서버가 3개 제한을 걸므로 거절되면 되돌린다.
+async function toggleStar(id, willStar) {
+  const r = await apiFetch(`/api/tasks/${id}/star`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ date: viewDate, star: willStar }),
+  });
+  if (!r.ok) { alert((await r.json()).error || "바꾸지 못했어요"); return; }
+  await loadDay(viewDate);
+}
+
 tasksEl.addEventListener("click", ev => {
   const row = ev.target.closest(".task");
   if (!row) return;
   const id = Number(row.dataset.id);
-  if (ev.target.closest(".box")) {
-    // 낙관적 업데이트: 화면 즉시 반영하고 서버는 백그라운드로 (렉 체감 제거)
-    const willDone = row.dataset.done !== "1";
-    row.dataset.done = willDone ? "1" : "0";
-    row.classList.toggle("done", willDone);
-    const box = row.querySelector(".box");
-    if (box) box.textContent = willDone ? "✓" : "";
-    apiFetch(`/api/tasks/${id}`, {
-      method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ done: willDone }),
-    }).catch(() => {});
-  } else {
-    openTaskEditor(taskById.get(id));
-  }
+  const star = ev.target.closest(".star");
+  if (star) { ev.stopPropagation(); toggleStar(id, star.dataset.star !== "1"); }
+  else if (ev.target.closest(".play")) { ev.stopPropagation(); startTimerFor(id); }
+  else if (ev.target.closest(".box")) toggleTaskDone(row, id);
+  else openTaskEditor(taskById.get(id));
 });
+
+focus3SlotsEl.addEventListener("click", ev => {
+  const row = ev.target.closest(".f3");
+  if (!row?.dataset.id) return;
+  const id = Number(row.dataset.id);
+  if (ev.target.closest(".play")) { ev.stopPropagation(); startTimerFor(id); }
+  else if (ev.target.closest(".box")) toggleTaskDone(row, id);
+  else openTaskEditor(taskById.get(id));
+});
+
+// 성적 바/주간 고리만 다시 받아온다 (전체 재렌더 없이 숫자만 갱신)
+async function refreshScores() {
+  try {
+    const j = await (await apiFetch(
+      `/api/scores?from=${weekData[0].date}&to=${weekData[6].date}`)).json();
+    scores = j.scores ?? scores;
+    streakN = j.streak ?? streakN;
+    renderDayScore();
+    renderWeekStrip();
+  } catch {}
+}
 wtEl.addEventListener("click", ev => {
   const b = ev.target.closest(".wt-block");
   const ad = ev.target.closest(".wt-adblock");
@@ -1584,6 +1868,8 @@ function showView(name) {
   btnTimer.classList.toggle("on", name === "timer");
   heroEl.style.display = hideDate ? "none" : "";
   chatBarEl.style.display = hideDate ? "none" : "";
+  if (hideDate) dayScoreEl.style.display = "none";
+  else { dayScoreEl.style.display = ""; renderDayScore(); }
   if (name === "memo") loadMemos();
   localStorage.setItem("view", name);
 }
@@ -1907,6 +2193,8 @@ function onTimerComplete() {
   clearInterval(tmInterval);
   beepTimer();
   if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+  const finishedFocus = tmMode === "simple" || tmPhase === "focus";
+  if (finishedFocus) creditFocus(Math.round(phaseMs() / 60000));
   if (tmMode === "pomo") {
     // 집중 ↔ 휴식 자동 전환, 계속 반복 (중지 전까지)
     tmPhase = tmPhase === "focus" ? "break" : "focus";
@@ -1916,6 +2204,7 @@ function onTimerComplete() {
     updateTimerControls();
     renderTimer(0, true);
   }
+  if (finishedFocus) askTargetDone();
 }
 function resetTimer() {
   clearInterval(tmInterval);
@@ -1923,6 +2212,50 @@ function resetTimer() {
   tmPhase = "focus";
   updateTimerControls();
   renderTimer(phaseMs());
+}
+
+// ── 타이머 ↔ 할 일 ── 무엇에 대한 25분인지 앱이 알면, 그 시간이 기록으로 쌓인다.
+const tmTargetEl = document.getElementById("tm-target");
+let tmTaskId = null, tmTaskTitle = "";
+function renderTimerTarget() {
+  tmTargetEl.hidden = !tmTaskId;
+  if (!tmTaskId) return;
+  tmTargetEl.innerHTML = `<span class="name">⏱ ${esc(tmTaskTitle)}</span><span class="x" id="tm-unlink">✕</span>`;
+  document.getElementById("tm-unlink").onclick = () => { tmTaskId = null; renderTimerTarget(); };
+}
+function creditFocus(minutes) {
+  if (!tmTaskId || minutes <= 0) return;
+  apiFetch(`/api/tasks/${tmTaskId}/focus`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ minutes }),
+  }).catch(() => {});
+}
+// 집중이 끝나면 그 자리에서 완료 여부를 묻는다 (물어보지 않으면 체크는 영영 안 된다)
+async function askTargetDone() {
+  if (!tmTaskId) return;
+  const id = tmTaskId, title = tmTaskTitle;
+  if (!confirm(`"${title}" — 끝났나요?\n확인을 누르면 완료로 표시해요.`)) return;
+  await apiFetch(`/api/tasks/${id}`, {
+    method: "PATCH", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ done: true }),
+  }).catch(() => {});
+  tmTaskId = null;
+  renderTimerTarget();
+  loadDay(viewDate);
+}
+// 할 일의 ▶ → 타이머 뷰로 넘어가며 그 할 일을 걸고 바로 시작
+function startTimerFor(id) {
+  const t = taskById.get(id);
+  if (!t) return;
+  if (tmState !== "idle" && !confirm("타이머가 돌고 있어요. 새로 시작할까요?")) return;
+  resetTimer();
+  tmTaskId = id;
+  tmTaskTitle = t.title;
+  renderTimerTarget();
+  showView("timer");
+  ensureAudio();
+  if (tmMode === "pomo") tmPhase = "focus";
+  runFrom(phaseMs());
 }
 
 // 완료 알림음 (짧게 두 번). 시작 버튼(사용자 제스처)에서 오디오를 미리 깨워 둔다.
@@ -1968,7 +2301,16 @@ tmPauseBtn.onclick = () => {
   clearInterval(tmInterval);
   updateTimerControls();
 };
-tmStopBtn.onclick = resetTimer;
+tmStopBtn.onclick = () => {
+  // 중지 전까지 흘러간 집중 시간도 기록에 남긴다 (25분을 다 못 채워도 한 건 한 거니까)
+  if (tmMode === "simple" || tmPhase === "focus") {
+    const elapsed = phaseMs() - (tmState === "paused" ? tmRemain : Math.max(0, tmEndAt - Date.now()));
+    creditFocus(Math.floor(elapsed / 60000));
+  }
+  resetTimer();
+  tmTaskId = null;
+  renderTimerTarget();
+};
 
 // 프리셋(1·3·5·10·25분) 탭
 tmSimplePanel.querySelector(".tm-presets").addEventListener("click", ev => {
@@ -2007,8 +2349,13 @@ function renderWeekStrip() {
       const mod = it.kind === "task" ? " todo" : (it.recurring ? " rec" : "");
       return `<span class="dot${mod}"></span>`;
     }).join("");
+    // 달성률 고리: 계획이 있었던 날에만. 닫은 날은 테두리에 옅은 링을 하나 더.
+    const s = scoreOf(day.date);
+    const pct = s && s.planned ? Math.round((s.done / s.planned) * 100) : 0;
+    const ringCls = ["ring", !s || !s.planned ? "none" : "", pct >= 100 ? "full" : "", s?.closed ? "closed" : ""].join(" ");
+    const ring = `<span class="${ringCls}" style="--pct:${pct}"></span>`;
     return `<div class="${cls}" data-i="${i}" data-date="${day.date}">
-      <div class="dots">${dots}</div><div class="label">${DAY_NAMES[(i + 1) % 7]}<br>${o.getDate()}</div></div>`;
+      <div class="dots">${dots}</div>${ring}<div class="label">${DAY_NAMES[(i + 1) % 7]}<br>${o.getDate()}</div></div>`;
   }).join("");
   const hasToday = weekData.some(d => d.date === todayStr);
   const f = weekData[0].date.split("-"), l = weekData[6].date.split("-");
@@ -2024,7 +2371,11 @@ function openPop(i) {
     const t = new Date(it.start);
     return `<div class="wp-item${it.recurring ? " recurring" : ""}"><span class="wp-time">${fmtTime(t)}</span>${esc(it.title)}</div>`;
   }).join("");
-  popEl.innerHTML = `<div class="wp-title">${title}</div>` + (items || `<div class="wp-empty">일정 없음</div>`);
+  const s = scoreOf(day.date);
+  const score = s?.planned ? `<div class="wp-item"><span class="wp-time">${s.done}/${s.planned}</span>${
+    s.starPlanned ? `핵심 ${s.starDone}/${s.starPlanned}` : "달성"}</div>` : "";
+  const note = s?.note ? `<div class="wp-item"><span class="wp-time">회고</span>${esc(s.note)}</div>` : "";
+  popEl.innerHTML = `<div class="wp-title">${title}</div>` + score + (items || `<div class="wp-empty">일정 없음</div>`) + note;
   popEl.hidden = false;
 }
 function closePop() { popEl.hidden = true; }
@@ -2288,9 +2639,18 @@ async function openEventEditor(eventId, occurrenceDate) {
 
 function openTaskEditor(task) {
   if (!task) return;
+  // "언제 할지"를 정해 두는 칸. 마감(언제까지)과 다르다 — 이게 있어야 실제로 하게 된다.
+  const planDate = task.plan_at ? task.plan_at.slice(0, 10) : viewDate;
+  const planTime = task.plan_at ? task.plan_at.slice(11, 16) : "";
   showSheet(`<div class="sheet-title">할 일 수정</div>
     <label class="fld"><span>제목</span><input id="m-title" value="${escapeAttr(task.title)}"></label>
     <label class="fld"><span>마감일 (없으면 비워두기)</span><input id="m-due" type="date" value="${task.due || ""}"></label>
+    <div class="two">
+      <label class="fld"><span>언제 할지 — 날짜</span><input id="m-plan-date" type="date" value="${planDate}"></label>
+      <label class="fld"><span>시각</span><input id="m-plan-time" type="time" value="${planTime}"></label>
+    </div>
+    <div class="cp-help">시각을 넣으면 시간표에 옅은 블록으로 뜨고, 비우면 계획을 지웁니다.</div>
+    ${task.spent_min ? `<div class="fld-note">⏱ 지금까지 ${task.spent_min}분 집중</div>` : ""}
     <div class="sheet-btns">
       <button class="ok" id="m-save">저장</button>
       <button class="del" id="m-del">삭제</button>
@@ -2301,9 +2661,11 @@ function openTaskEditor(task) {
     const title = document.getElementById("m-title").value.trim();
     if (!title) return;
     const due = document.getElementById("m-due").value || null;
+    const pd = document.getElementById("m-plan-date").value;
+    const pt = document.getElementById("m-plan-time").value;
     await apiFetch(`/api/tasks/${task.id}`, {
       method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, due }),
+      body: JSON.stringify({ title, due, plan_at: pd && pt ? `${pd}T${pt}` : null }),
     });
     closeSheet(); loadDay(viewDate);
   };
@@ -2313,6 +2675,112 @@ function openTaskEditor(task) {
     closeSheet(); loadDay(viewDate);
   };
 }
+
+// ───────── 하루 닫기 ─────────
+// 종이 플래너에서 저녁에 페이지를 보며 줄을 긋고, 못 한 건 손으로 다시 쓰는 그 의식.
+// 남은 것마다 "내일로 / 이번 주 안에 / 버림 / 그대로"를 고르게 해서 밀린 목록이 무한히 자라지 않게 한다.
+const MOOD_EMOJI = ["😖", "😕", "😐", "🙂", "😄"];
+async function openCloseDay() {
+  const r = await apiFetch(`/api/review?date=${viewDate}`);
+  if (!r.ok) return;
+  const rv = await r.json();
+  const left = rv.tasks.filter(t => !t.done);
+  const pct = rv.planned ? Math.round((rv.done / rv.planned) * 100) : null;
+  const o = dateObj(viewDate);
+
+  const head = `<div class="rv-head">
+    ${o.getMonth() + 1}월 ${o.getDate()}일 · 계획 ${rv.planned}개 중 <b>${rv.done}개</b>${pct == null ? "" : ` (${pct}%)`}
+    ${rv.starPlanned ? ` · ⭐ 핵심 ${rv.starDone}/${rv.starPlanned}` : ""}
+  </div>`;
+
+  const acts = id => `<div class="rv-acts" data-id="${id}">
+      <button data-a="keep" class="on">그대로</button>
+      <button data-a="tomorrow">내일로</button>
+      <button data-a="week">이번 주 안에</button>
+      <button data-a="drop" class="drop">버림</button>
+    </div>`;
+  const items = left.length
+    ? left.map(t => `<div class="rv-item">
+        <div class="t">${t.star_date === viewDate ? `<span class="star">★</span> ` : ""}${esc(t.title)}</div>
+        ${acts(t.id)}</div>`).join("")
+    : `<div class="fld-note">남은 할 일 없음. 깔끔하네요.</div>`;
+
+  showSheet(`<div class="sheet-title">하루 닫기</div>${head}${items}
+    <textarea class="rv-note" id="rv-note" placeholder="오늘 하루, 스스로에게 한 줄">${
+      rv.log?.note ? esc(rv.log.note) : ""}</textarea>
+    <div class="rv-moods" id="rv-moods">${
+      MOOD_EMOJI.map((e, i) => `<button data-m="${i + 1}"${rv.log?.mood === i + 1 ? ' class="on"' : ""}>${e}</button>`).join("")}</div>
+    <div class="sheet-btns">
+      <button class="ok" id="rv-save">닫기</button>
+      <button class="no" id="rv-cancel">취소</button>
+    </div>`);
+
+  // 항목별 선택 (한 줄에서 하나만)
+  sheetEl.querySelectorAll(".rv-acts").forEach(g => g.addEventListener("click", ev => {
+    const b = ev.target.closest("button");
+    if (!b) return;
+    g.querySelectorAll("button").forEach(x => x.classList.remove("on"));
+    b.classList.add("on");
+  }));
+  let mood = rv.log?.mood ?? null;
+  document.getElementById("rv-moods").addEventListener("click", ev => {
+    const b = ev.target.closest("button");
+    if (!b) return;
+    const same = b.classList.contains("on");
+    sheetEl.querySelectorAll("#rv-moods button").forEach(x => x.classList.remove("on"));
+    if (!same) { b.classList.add("on"); mood = Number(b.dataset.m); } else mood = null;
+  });
+
+  document.getElementById("rv-cancel").onclick = closeSheet;
+  document.getElementById("rv-save").onclick = async () => {
+    const actions = [...sheetEl.querySelectorAll(".rv-acts")].map(g => ({
+      id: Number(g.dataset.id),
+      action: g.querySelector("button.on")?.dataset.a ?? "keep",
+    })).filter(a => a.action !== "keep");
+    await apiFetch("/api/review", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ date: viewDate, note: document.getElementById("rv-note").value, mood, actions }),
+    });
+    closeSheet();
+    loadDay(viewDate);
+  };
+}
+
+function renderGoals() {
+  const rows = goals.map(g => `<div class="goal${g.done ? " done" : ""}" data-id="${g.id}" data-done="${g.done ? 1 : 0}">
+    <div class="box">${g.done ? "✓" : ""}</div><div class="name">${esc(g.title)}</div><div class="x">✕</div></div>`);
+  if (goals.length < 3) rows.push(`<button class="goal-add" id="goal-add">＋ 이번 주 목표 추가</button>`);
+  goalsEl.innerHTML = rows.join("");
+}
+goalsEl.addEventListener("click", async ev => {
+  if (ev.target.closest("#goal-add")) {
+    const title = prompt("이번 주에 이루고 싶은 것 하나:");
+    if (!title?.trim()) return;
+    await apiFetch("/api/goals", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: title.trim(), date: viewDate }),
+    });
+    return loadDay(viewDate);
+  }
+  const row = ev.target.closest(".goal");
+  if (!row) return;
+  const id = Number(row.dataset.id);
+  if (ev.target.closest(".x")) {
+    if (!confirm("이 목표를 지울까요?")) return;
+    await apiFetch(`/api/goals/${id}`, { method: "DELETE" });
+    return loadDay(viewDate);
+  }
+  const willDone = row.dataset.done !== "1";
+  row.dataset.done = willDone ? "1" : "0";
+  row.classList.toggle("done", willDone);
+  row.querySelector(".box").textContent = willDone ? "✓" : "";
+  const g = goals.find(x => x.id === id);
+  if (g) g.done = willDone ? 1 : 0;
+  apiFetch(`/api/goals/${id}`, {
+    method: "PATCH", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ done: willDone }),
+  }).catch(() => {});
+});
 
 // 서비스워커 등록 — 홈 화면 설치 + 오프라인 껍데기
 if ("serviceWorker" in navigator) {
