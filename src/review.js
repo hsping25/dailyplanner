@@ -4,18 +4,20 @@
 //   - 그날 일정 회차(종일 포함)
 //   - 그날 마감인 할 일
 //   - 그날 핵심(star_date)으로 뽑은 할 일
-//   같은 할 일이 마감+핵심이면 한 번만 센다. 버린 것(archived)은 분모에서 뺀다.
+//   같은 할 일이 마감+핵심이면 한 번만 센다.
 //
-// "버림"만 분모에서 빼는 이유: 버림은 "이건 애초에 계획이 잘못됐다"는 인정이라
-// 계획에서 지우는 게 맞고, 이월(내일로)은 미룬 것이니 그날은 미완료로 남겨야
-// 숫자가 정직해진다. 이렇게 해야 밀린 목록을 정리할 동기가 생긴다.
+// **버린 것(archived)도 분모에 남는다.** 목록에서는 치우되 그날 계획에는 있었던 것이므로,
+// 안 하고 버린 걸 없던 일로 치면 동그라미가 꽉 차서 숫자가 거짓말을 한다.
+// 이월(내일로)도 마찬가지로 그날은 미완료. 분자(done)에 들어가는 건 실제로 해낸 것뿐이다.
+// 버린 개수는 따로(dropped) 세어 "5개 중 2개 완료 · 1개 버림"처럼 보여 준다.
 import { get, all, run } from "./db.js";
 import { dayWindow, shiftDate, weekStart, todayStr, nowStamp, loadEvents, expand } from "./day.js";
 
-// 그날 계획에 잡힌 할 일 (마감이 그날 + 그날 핵심, 버린 건 제외)
+// 그날 계획에 잡힌 할 일 (마감이 그날 + 그날 핵심).
+// **버린 것도 포함**해서 돌려준다 — 분모에 남아야 하므로. 목록에 뿌릴 때만 archived를 거른다.
 export async function tasksForDate(user, date) {
   return all(
-    `SELECT * FROM tasks WHERE "user" = ? AND archived = 0 AND (due = ? OR star_date = ?)
+    `SELECT * FROM tasks WHERE "user" = ? AND (due = ? OR star_date = ?)
      ORDER BY star_date IS NULL, plan_at IS NULL, plan_at, id`,
     [user, date, date]);
 }
@@ -25,7 +27,7 @@ export async function tasksForDate(user, date) {
 // 마감일과 핵심일이 다르면 두 날짜 모두에 들어가고, 같으면 Map이라 한 번만 센다.
 export async function tasksByDateInRange(user, from, to) {
   const rows = await all(
-    `SELECT * FROM tasks WHERE "user" = ? AND archived = 0
+    `SELECT * FROM tasks WHERE "user" = ?
        AND ((due >= ? AND due <= ?) OR (star_date >= ? AND star_date <= ?))`,
     [user, from, to, from, to]);
   const byDate = new Map();
@@ -48,18 +50,19 @@ export async function dayScore(user, date, loaded) {
   const stars = tasks.filter(t => t.star_date === date);
   return {
     date,
-    planned: events.length + tasks.length,
+    planned: events.length + tasks.length,          // 버린 것 포함 (계획에는 있었으니까)
     done: events.filter(e => e.done).length + tasks.filter(t => t.done).length,
+    dropped: tasks.filter(t => t.archived && !t.done).length,
     starPlanned: stars.length,
     starDone: stars.filter(t => t.done).length,
     events, tasks,
   };
 }
 
-// 아직 안 끝난 것들 (하루 닫기 화면에 올릴 목록)
+// 아직 안 끝난 것들 (하루 닫기 화면에 올릴 목록). 이미 버린 건 다시 묻지 않는다.
 export function leftovers(score) {
   return {
-    tasks: score.tasks.filter(t => !t.done),
+    tasks: score.tasks.filter(t => !t.done && !t.archived),
     events: score.events.filter(e => !e.done),
   };
 }
@@ -81,7 +84,9 @@ export async function applyActions(user, date, actions = []) {
     const t = await get('SELECT * FROM tasks WHERE id = ? AND "user" = ?', [id, user]);
     if (!t) continue;
     if (action === "drop") {
-      await run('UPDATE tasks SET archived = 1, star_date = NULL WHERE id = ? AND "user" = ?', [id, user]);
+      // due/star_date는 그대로 둔다 — 그날 계획이었다는 사실이 남아야 분모에 계속 잡힌다.
+      // 목록/주간 점에서는 archived로 걸러지므로 화면은 깨끗해진다.
+      await run('UPDATE tasks SET archived = 1 WHERE id = ? AND "user" = ?', [id, user]);
     } else if (action === "tomorrow") {
       // 오늘 핵심이었으면 내일도 핵심으로 (내일 칸이 남아 있을 때만)
       const keepStar = t.star_date === date && starRoom > 0;
@@ -98,37 +103,37 @@ export async function applyActions(user, date, actions = []) {
 }
 
 // ── 하루 닫기 ── 미완료를 처리하고, 그 시점의 성적 + 회고를 day_log에 남긴다.
-// base(= {planned, starPlanned})를 주면 그 값을 분모의 출발점으로 삼는다.
-// 텔레그램 회고처럼 항목을 하나씩 먼저 처리한 뒤에 닫는 경우, 이미 옮겨진 것들이
+// base(= {planned, starPlanned})를 주면 그 값을 분모의 최소치로 삼는다.
+// 텔레그램 회고처럼 항목을 하나씩 먼저 처리한 뒤에 닫는 경우, 이미 내일로 옮겨진 것들이
 // 분모에서 빠져 버리므로 메시지를 보낸 시점의 계획 개수를 넘겨받아야 한다.
 export async function closeDay(user, date, { note = null, mood = null, actions = [], base = null } = {}) {
-  // 성적은 "정리하기 전"을 기준으로 잡는다. 내일로 미룬 것은 오늘 분모에 그대로 남아야
-  // 이월이 곧 100%가 되는 구멍이 생기지 않는다. 버린 것만 분모에서 뺀다.
-  const before = await dayScore(user, date);
-  const dropped = new Set(actions.filter(a => a.action === "drop").map(a => Number(a.id)));
-  const droppedTasks = before.tasks.filter(t => dropped.has(t.id) && !t.done);
-
+  const [before, prev] = await Promise.all([
+    dayScore(user, date),      // 정리하기 전 = 그날 진짜 계획했던 양
+    dayLog(user, date),        // 이미 닫았던 날이면 그때 기록한 분모
+  ]);
   await applyActions(user, date, actions);
-  const after = await dayScore(user, date);   // 완료 개수는 지금 값을 쓴다(그 사이 체크했을 수 있으니)
+  const s = await dayScore(user, date);
 
-  const planned = (base?.planned ?? before.planned) - droppedTasks.length;
-  const starPlanned = (base?.starPlanned ?? before.starPlanned)
-    - droppedTasks.filter(t => t.star_date === date).length;
-  const s = {
-    date,
-    planned: Math.max(0, planned),
-    done: Math.min(after.done, Math.max(0, planned)),
-    starPlanned: Math.max(0, starPlanned),
-    starDone: Math.min(after.starDone, Math.max(0, starPlanned)),
+  // 분모는 넷 중 가장 큰 값. 이월한 것은 다른 날짜로 옮겨 가 s에서 빠지므로 before가 받쳐 주고,
+  // 텔레그램 회고처럼 항목을 미리 하나씩 옮긴 경우엔 메시지 보낸 시점의 base가,
+  // 다시 닫는 경우엔 지난번 기록(prev)이 받쳐 준다. 한번 계획한 양은 줄어들지 않는다.
+  // 버린 것은 날짜를 그대로 두므로 s.planned에 이미 들어 있다.
+  const planned = Math.max(s.planned, before.planned, base?.planned ?? 0, prev?.planned ?? 0);
+  const starPlanned = Math.max(s.starPlanned, before.starPlanned, base?.starPlanned ?? 0, prev?.star_planned ?? 0);
+  const snap = {
+    date, planned, starPlanned,
+    done: Math.min(s.done, planned),
+    dropped: s.dropped,
+    starDone: Math.min(s.starDone, starPlanned),
   };
-  await run(`INSERT INTO day_log ("user", date, planned, done, star_planned, star_done, note, mood, closed_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  await run(`INSERT INTO day_log ("user", date, planned, done, dropped, star_planned, star_done, note, mood, closed_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT ("user", date) DO UPDATE SET planned=EXCLUDED.planned, done=EXCLUDED.done,
-      star_planned=EXCLUDED.star_planned, star_done=EXCLUDED.star_done,
+      dropped=EXCLUDED.dropped, star_planned=EXCLUDED.star_planned, star_done=EXCLUDED.star_done,
       note=EXCLUDED.note, mood=EXCLUDED.mood, closed_at=EXCLUDED.closed_at`,
-    [user, date, s.planned, s.done, s.starPlanned, s.starDone, note, mood, nowStamp()]);
+    [user, date, snap.planned, snap.done, snap.dropped, snap.starPlanned, snap.starDone, note, mood, nowStamp()]);
 
-  return s;
+  return snap;
 }
 
 export async function dayLog(user, date) {
@@ -151,7 +156,7 @@ export async function scoresBetween(user, from, to, loaded, byDay = null) {
     const lg = logs.get(d);
     if (lg?.closed_at) {
       out.push({
-        date: d, planned: lg.planned, done: lg.done,
+        date: d, planned: lg.planned, done: lg.done, dropped: lg.dropped ?? 0,
         starPlanned: lg.star_planned, starDone: lg.star_done,
         closed: true, note: lg.note, mood: lg.mood,
       });
@@ -163,8 +168,9 @@ export async function scoresBetween(user, from, to, loaded, byDay = null) {
     const stars = tasks.filter(t => t.star_date === d);
     out.push({
       date: d,
-      planned: events.length + tasks.length,
+      planned: events.length + tasks.length,          // 버린 것 포함
       done: events.filter(e => e.done).length + tasks.filter(t => t.done).length,
+      dropped: tasks.filter(t => t.archived && !t.done).length,
       starPlanned: stars.length,
       starDone: stars.filter(t => t.done).length,
       closed: false, note: lg?.note ?? null, mood: lg?.mood ?? null,

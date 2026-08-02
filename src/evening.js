@@ -31,7 +31,7 @@ export async function composeEvening(user, date = todayStr()) {
 
   const pct = ratio(s.planned, s.done);
   lines.push(s.planned
-    ? `오늘 계획 ${s.planned}개 중 ${s.done}개 완료 (${pct}%)`
+    ? `오늘 계획 ${s.planned}개 중 ${s.done}개 완료 (${pct}%)` + (s.dropped ? ` · ${s.dropped}개 버림` : "")
     : "오늘은 계획에 잡아 둔 게 없었어요.");
 
   if (s.starPlanned) {
@@ -142,14 +142,7 @@ export async function handleCallback(cb) {
       const flow = await getFlow(chat);
       if (!flow) { await answerCallback(cb.id, "이미 지난 회고예요"); return true; }
       const id = Number(a);
-      // 버린 것만 분모에서 뺀다 (이월은 오늘의 미완료로 남는다)
-      if (b === "drop" && flow.base) {
-        const t = await get('SELECT star_date, done FROM tasks WHERE id = ? AND "user" = ?', [id, flow.user]);
-        if (t && !t.done) {
-          flow.base.planned = Math.max(0, flow.base.planned - 1);
-          if (t.star_date === flow.date) flow.base.starPlanned = Math.max(0, flow.base.starPlanned - 1);
-        }
-      }
+      // 이월이든 버림이든 분모는 그대로 — 안 한 건 안 한 것이다.
       await applyAction(flow.user, flow.date, id, b);
       flow.queue = flow.queue.filter(q => q !== id);
       await setFlow(chat, flow);

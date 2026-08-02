@@ -100,6 +100,7 @@ export async function initDb() {
     date TEXT NOT NULL,
     planned INTEGER NOT NULL DEFAULT 0,
     done INTEGER NOT NULL DEFAULT 0,
+    dropped INTEGER NOT NULL DEFAULT 0,
     star_planned INTEGER NOT NULL DEFAULT 0,
     star_done INTEGER NOT NULL DEFAULT 0,
     note TEXT,
@@ -107,6 +108,8 @@ export async function initDb() {
     closed_at TEXT,
     PRIMARY KEY ("user", date)
   )`);
+  // dropped 칸이 없던 시절 DB엔 칸만 추가 (버린 개수 — 분모엔 남고 따로 표시된다)
+  await addColumn("day_log", "dropped", "INTEGER NOT NULL DEFAULT 0");
   // 주간 목표: week = 그 주 월요일 날짜("YYYY-MM-DD"). 한 주에 최대 3개.
   await run(`CREATE TABLE IF NOT EXISTS goals (
     id ${AUTO},

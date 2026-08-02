@@ -84,8 +84,14 @@ app.get("/api/review", ah(async (req, res) => {
   const user = userOf(req);
   const date = req.query.date || todayStr();
   const [s, log, st] = await Promise.all([dayScore(user, date), dayLog(user, date), streak(user)]);
+  // 이미 닫은 날이면 그때 기록한 분모가 바닥 — 이월해 간 것들이 빠져 숫자가 줄어 보이지 않게.
   res.json({
-    date, planned: s.planned, done: s.done, starPlanned: s.starPlanned, starDone: s.starDone,
+    date,
+    planned: Math.max(s.planned, log?.planned ?? 0),
+    done: s.done,
+    dropped: s.dropped,
+    starPlanned: Math.max(s.starPlanned, log?.star_planned ?? 0),
+    starDone: s.starDone,
     events: s.events, tasks: s.tasks, log, streak: st,
   });
 }));
