@@ -104,6 +104,7 @@ export function fatigue(date, events, tasks, prev = null) {
   add(Math.min(12, tight * 4), `쉴 틈 없이 붙은 일정 ${tight}번`);
   if (prev?.mood != null && prev.mood <= 2) add(8, "어제 기분 낮음");
   if (prev?.busy >= 8 * 60) add(6, "어제도 바빴음");
+  if (prev?.overdue) add(Math.min(10, prev.overdue * 2), `밀린 할 일 ${prev.overdue}개`); // 남은 할 일에 이미 들어 있고, 밀렸다는 압박만 조금 더
 
   const score = Math.min(100, parts.reduce((a, p) => a + p.pts, 0));
   const level = score >= 70 ? "빡빡" : score >= 40 ? "보통" : "여유";
@@ -144,20 +145,27 @@ async function dayContext(user, date) {
     tasksByDateInRange(user, yday, date),
     get('SELECT mood FROM day_log WHERE "user" = ? AND date = ?', [user, yday]),
   ]);
-  // 마감·핵심이 없어도 plan_at이 그날인 할 일은 그날 할 일로 본다
-  const planned = await all(
-    `SELECT * FROM tasks WHERE "user" = ? AND archived = 0 AND plan_at >= ? AND plan_at < ?`,
-    [user, `${date}T00:00`, `${shiftDate(date, 1)}T00:00`]);
-  const tmap = new Map([...(byDate.get(date)?.values() ?? []), ...planned].map(t => [t.id, t]));
+  // 앱 목록에 보이는 할 일은 전부 본다: 그날 것(마감·핵심) + plan_at이 그날인 것
+  // + (오늘·앞날이면) 아직 안 한 밀린 할 일과 마감 없는 할 일. 지난 날엔 지금의 밀린 목록이 무의미하니 뺀다.
+  const now = nowStamp(), today = todayStr();
+  const canTouch = date >= today;
+  const extra = await all(
+    `SELECT * FROM tasks WHERE "user" = ? AND archived = 0
+       AND ((plan_at >= ? AND plan_at < ?) OR (? AND done = 0 AND (due IS NULL OR due < ?)))`,
+    [user, `${date}T00:00`, `${shiftDate(date, 1)}T00:00`, canTouch ? 1 : 0, date]);
+  const tmap = new Map([...(byDate.get(date)?.values() ?? []), ...extra].map(t => [t.id, t]));
   const tasks = [...tmap.values()];
+  const group = t => t.due === date || t.star_date === date || t.plan_at?.startsWith(date) ? "오늘"
+    : t.due && t.due < date ? "밀림" : "마감 없음";
   const w = dayWindow(date), yw = dayWindow(yday);
   const events = expand(loaded, w.start, w.end);
   const yBusy = fatigue(yday, expand(loaded, yw.start, yw.end), [...(byDate.get(yday)?.values() ?? [])]).busyMin;
-  const fat = fatigue(date, events, tasks, { mood: ylog?.mood ?? null, busy: yBusy });
+  // 피로도엔 오늘 것 + 밀린 것만 (마감 없는 건 오늘 꼭 할 부담이 아니다)
+  const fat = fatigue(date, events, tasks.filter(t => group(t) !== "마감 없음"),
+    { mood: ylog?.mood ?? null, busy: yBusy, overdue: tasks.filter(t => group(t) === "밀림").length });
 
-  // 수정 후보: 필수가 아니고, 아직 안 했고, (오늘이면) 아직 시작 안 한 것만
-  const now = nowStamp(), today = todayStr();
-  const canTouch = date >= today;
+  // 수정 후보: 필수가 아니고, 아직 안 했고, (오늘이면) 아직 시작 안 한 것만.
+  // 마감 없는 할 일은 옮길 날짜가 없으니 후보에서 뺀다(언급만).
   const items = [
     ...events.map(e => ({
       ref: `e${e.eventId}`, kind: "일정", title: e.title,
@@ -166,11 +174,12 @@ async function dayContext(user, date) {
       movable: canTouch && !e.done && !(date === today && e.start <= now),
     })),
     ...tasks.map(t => ({
-      ref: `t${t.id}`, kind: "할 일", title: t.title,
-      when: t.plan_at?.startsWith(date) ? `${hhmm(t.plan_at)}에 하기로` : t.due === date ? "오늘 마감" : "",
+      ref: `t${t.id}`, kind: "할 일", title: t.title, group: group(t),
+      when: t.plan_at?.startsWith(date) ? `${hhmm(t.plan_at)}에 하기로` : t.due === date ? "오늘 마감"
+        : t.due && t.due < date ? `${t.due} 마감이었음` : "",
       star: t.star_date === date, done: !!t.done, archived: !!t.archived, must: !!t.must,
       spent: t.spent_min || 0,
-      movable: canTouch && !t.done && !t.archived,
+      movable: canTouch && !t.done && !t.archived && group(t) !== "마감 없음",
     })),
   ];
   for (const it of items) it.movable = it.movable && !it.must;
@@ -185,6 +194,8 @@ const DAY_SYSTEM = `너는 한국어 개인 플래너 앱의 코치다. 사용�
 - 제안은 최대 cap개. 계획이 감당할 만하면 제안하지 말고 빈 배열을 돌려줘라. 억지로 채우지 마라.
 - action: 할 일 → "tomorrow"(내일로) 또는 "week"(이번 주 안으로). 일정 → 반복이면 "skip"(이 날만 빼기), 단발이면 "tomorrow"(같은 시각 내일로).
 - 핵심(star) 할 일은 가급적 남겨라.
+할 일의 group: "오늘"(그날 마감·핵심·하기로 한 것), "밀림"(마감이 지났는데 안 한 것), "마감 없음"(언젠가 할 것).
+요약에는 할 일 목록 전체를 반영해라 — 밀린 게 쌓였으면 짚어 주고, 여유로운 날이면 마감 없는 할 일 중 하나를 해 보자고 권해도 좋다.
 지난 날이면 제안 없이 그날을 돌아보는 코멘트만 해라.
 반드시 아래 JSON만 출력:
 {"summary":"하루 요약 2~4문장","fatigue":"피로도에 대한 한두 문장","suggestions":[{"ref":"t12","action":"tomorrow","reason":"이유 한 문장"}]}`;
@@ -257,14 +268,20 @@ const WEEK_SYSTEM = `너는 한국어 개인 플래너 앱의 코치다. 한 주
 
 async function weekContext(user, monday) {
   const sunday = shiftDate(monday, 6);
-  const [loaded, byDate, goals, prevScores] = await Promise.all([
+  const today = todayStr();
+  const [loaded, byDate, goals, prevScores, doneInWeek, open] = await Promise.all([
     loadEvents(user),
     tasksByDateInRange(user, monday, sunday),
     all('SELECT title, done FROM goals WHERE "user" = ? AND week = ? ORDER BY id', [user, monday]),
     scoresBetween(user, shiftDate(monday, -7), shiftDate(monday, -1)),
+    // 마감 없는 할 일이나 다른 주 마감인 걸 이번 주에 해낸 것도 해낸 것이다 (하루 경계 04시)
+    all(`SELECT * FROM tasks WHERE "user" = ? AND done = 1 AND done_at >= ? AND done_at < ?`,
+      [user, `${monday}T04:00`, `${shiftDate(monday, 7)}T04:00`]),
+    // 아직 안 한 것 — 밀린 것과 마감 없는 것이 얼마나 쌓였나
+    all(`SELECT due FROM tasks WHERE "user" = ? AND done = 0 AND archived = 0 AND (due IS NULL OR due < ?)`,
+      [user, sunday < today ? shiftDate(sunday, 1) : today]),
   ]);
   // 진행 중인 주는 오늘까지만 센다 — 아직 오지 않은 날을 "못 한 날"로 치면 리포트가 거짓말을 한다
-  const today = todayStr();
   const scores = await scoresBetween(user, monday, sunday < today ? sunday : today, loaded);
   const sum = arr => arr.reduce((a, s) => ({ p: a.p + s.planned, d: a.d + s.done }), { p: 0, d: 0 });
   const tot = sum(scores), prevTot = sum(prevScores);
@@ -277,10 +294,11 @@ async function weekContext(user, monday) {
       닫음: s.closed, 기분: s.mood, 회고: s.note, 피로도: f.score,
     };
   });
-  const allTasks = [...new Map([...byDate.entries()].filter(([d]) => d <= today)
-    .flatMap(([, m]) => [...m.values()]).map(t => [t.id, t])).values()];
+  const allTasks = [...new Map([...[...byDate.entries()].filter(([d]) => d <= today)
+    .flatMap(([, m]) => [...m.values()]), ...doneInWeek].map(t => [t.id, t])).values()];
   return {
     주: `${monday} ~ ${sunday}`, 진행중: sunday >= today, 남은날: Math.max(0, 7 - scores.length),
+    밀린할일수: open.filter(t => t.due).length, 마감없는할일수: open.filter(t => !t.due).length,
     달성률: ratio(tot.p, tot.d), 지난주달성률: ratio(prevTot.p, prevTot.d),
     완료: tot.d, 계획: tot.p,
     집중분: allTasks.reduce((a, t) => a + (t.spent_min || 0), 0),
