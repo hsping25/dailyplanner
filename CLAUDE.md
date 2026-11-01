@@ -137,3 +137,7 @@
 - planner.db와 .env는 .gitignore → 깃/Render엔 안 올라감. Postgres는 최초 배포 때 빈 스키마로 시작.
 - render.yaml = Render Blueprint(원클릭). /healthz = UptimeRobot용 헬스체크(5분 간격 핑 → 무료 티어 잠들기 방지).
 - PWA 설치와 SW는 HTTPS에서만 동작(Render는 https 제공).
+
+## 깃 동기화
+- 작업 시작 전 `git pull --ff-only`로 최신 내용 받기 (여러 기기에서 작업함).
+- 수정이 끝나고 확인되면 묻지 않고 커밋 + `git push` (origin main). 푸시하면 Render가 자동 배포하므로 덜 끝난 수정은 올리지 않는다.
