@@ -134,6 +134,7 @@
   - 07:00/14:00은 놓침-보정(그 시각이 지났는데 그날 아직 안 보냈으면 보냄)이지만 **하루 닫기는 보정하지 않는다** — 자정을 넘겨 보내면 '어제'를 묻는 꼴이 되므로 그날 안에만.
 - **시간대**: 날짜 로직이 서버 로컬시간=KST 가정. 클라우드(UTC)에선 **env TZ=Asia/Seoul 필수**. 아니면 '오늘' 계산이 9시간 어긋남. 서버 시작 시 offset≠540이면 경고 로그.
 - **영속성**: 배포는 Neon Postgres(무료·영구). Render 환경변수 DATABASE_URL에 Neon 연결 문자열 넣으면 자동으로 Postgres 사용. 안 넣으면 SQLite(로컬/휘발). DB_PATH는 SQLite 파일 경로용(로컬).
+- **Neon 컴퓨트 절약**: Neon 무료는 5분간 조회가 없어야 잠든다. 백그라운드 루프(알림 감시·텔레그램 폴러·일일 점검)는 한가할 때 DB를 조회하면 안 된다 → db.js의 dataVersion()(쓰기마다 증가)으로 메모리 캐시를 무효화하고, 보낸 알림 키는 claimKey(notify.js)가 메모리에 기억. 새 루프를 추가할 때도 같은 방식으로.
 - planner.db와 .env는 .gitignore → 깃/Render엔 안 올라감. Postgres는 최초 배포 때 빈 스키마로 시작.
 - render.yaml = Render Blueprint(원클릭). /healthz = UptimeRobot용 헬스체크(5분 간격 핑 → 무료 티어 잠들기 방지).
 - PWA 설치와 SW는 HTTPS에서만 동작(Render는 https 제공).

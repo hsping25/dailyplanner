@@ -23,6 +23,12 @@ if (usePg) {
 // "?" 자리표시자를 Postgres의 $1,$2… 로 변환
 function toPg(sql) { let i = 0; return sql.replace(/\?/g, () => `$${++i}`); }
 
+// 쓰기(run/insert)가 일어날 때마다 1씩 오르는 번호. 백그라운드 루프(알림 감시 등)는
+// 읽은 결과를 이 번호와 함께 메모리에 들고 있다가, 번호가 그대로면 DB에 다시 묻지 않는다.
+// → 아무도 앱을 안 쓰는 동안 DB가 조회를 안 받아 Neon이 잠들 수 있다(무료 컴퓨트 시간 절약).
+let version = 0;
+export const dataVersion = () => version;
+
 export async function get(sql, params = []) {
   if (usePg) return (await pgPool.query(toPg(sql), params)).rows[0];
   return sqlite.prepare(sql).get(...params);
@@ -32,11 +38,13 @@ export async function all(sql, params = []) {
   return sqlite.prepare(sql).all(...params);
 }
 export async function run(sql, params = []) {
+  version++;
   if (usePg) return { changes: (await pgPool.query(toPg(sql), params)).rowCount };
   return { changes: Number(sqlite.prepare(sql).run(...params).changes) };
 }
 // INSERT 후 새 id가 필요할 때
 export async function insert(sql, params = []) {
+  version++;
   if (usePg) return Number((await pgPool.query(toPg(sql) + " RETURNING id", params)).rows[0].id);
   return Number(sqlite.prepare(sql).run(...params).lastInsertRowid);
 }

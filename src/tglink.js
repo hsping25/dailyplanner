@@ -1,5 +1,5 @@
 // 아이디 ↔ 텔레그램 연결. 딥링크(t.me/<봇>?start=<코드>)로 사용자가 "시작"만 누르면 연결됨.
-import { get, all, run } from "./db.js";
+import { get, all, run, dataVersion } from "./db.js";
 import { sendTelegram, getUpdatesRaw } from "./telegram.js";
 import { handleCallback, handleText } from "./evening.js";
 
@@ -9,9 +9,14 @@ export async function chatIdFor(user) {
   return r ? r.chat_id : null;
 }
 export function linkStatus(user) { return chatIdFor(user); }
+// 알림 루프가 30초·1분마다 부르므로 메모리에 들고 있다가 DB에 쓰기가 있을 때만 다시 읽는다.
+let linkedCache = null;
 export async function linkedUsers() {
+  const v = dataVersion();
+  if (linkedCache?.v === v) return linkedCache.rows;
   const rows = await all('SELECT "user", chat_id FROM tg_link WHERE chat_id IS NOT NULL', []);
-  return rows.map(r => ({ user: r.user, chat_id: r.chat_id }));
+  linkedCache = { v, rows: rows.map(r => ({ user: r.user, chat_id: r.chat_id })) };
+  return linkedCache.rows;
 }
 export async function unlink(user) { await run('DELETE FROM tg_link WHERE "user" = ?', [user]); }
 
@@ -33,11 +38,15 @@ export async function seedLegacyLink() {
 }
 
 // ── getUpdates 폴러: 봇에게 온 /start <코드> 를 보고 연결 확정 ──
+// offset은 처음 한 번만 DB에서 읽고 이후엔 메모리 값을 쓴다. 4초마다 DB를 두드리면 Neon이 잠들지 못한다.
+let offsetCache = null;
 async function getOffset() {
+  if (offsetCache != null) return offsetCache;
   const r = await get("SELECT v FROM kv WHERE k = 'tg_offset'", []);
-  return r ? Number(r.v) : 0;
+  return (offsetCache = r ? Number(r.v) : 0);
 }
 async function setOffset(v) {
+  offsetCache = v;
   await run(`INSERT INTO kv (k, v) VALUES ('tg_offset', ?)
     ON CONFLICT (k) DO UPDATE SET v = EXCLUDED.v`, [String(v)]);
 }
