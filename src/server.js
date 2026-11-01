@@ -9,6 +9,7 @@ import { startNotifier } from "./notify.js";
 import { startSchedules } from "./schedule.js";
 import { getBotUsername } from "./telegram.js";
 import { linkCode, linkStatus, unlink, startTgPoller } from "./tglink.js";
+import { dayNote, weekReport, applySuggestion, weekReportPending } from "./ai.js";
 
 const app = express();
 app.use(express.json({ limit: "5mb" })); // 그림 메모(PNG 데이터 URL)가 기본 100kb를 넘을 수 있음
@@ -48,7 +49,7 @@ app.get("/api/day", ah(async (req, res) => {
   // 순차로 await하면 날짜를 넘길 때마다 그만큼 기다리게 된다.
   const loaded = await loadEvents(user);
   const byDay = expandWeek(loaded, monday);
-  const [tasks, week, scores, log, st, goals] = await Promise.all([
+  const [tasks, week, scores, log, st, goals, aiWeekPending] = await Promise.all([
     // 버린 것(archived)은 안 보인다. 핵심(star_date)은 마감이 없어도 그날 목록에 올라온다.
     all(`SELECT * FROM tasks WHERE "user" = ? AND archived = 0
            AND (done = 0 OR due = ? OR star_date = ?)
@@ -59,12 +60,14 @@ app.get("/api/day", ah(async (req, res) => {
     dayLog(user, date),
     streak(user),
     all('SELECT * FROM goals WHERE "user" = ? AND week = ? ORDER BY id', [user, monday]),
+    weekReportPending(user, shiftDate(weekStart(todayStr()), -7)),
   ]);
 
   res.json({
     date,
     events: byDay.get(date) ?? expand(loaded, start, end),
     tasks, week, scores, log, streak: st, goals,
+    aiWeekPending,   // 지난주 AI 리포트를 아직 안 받았으면 ✨에 점
   });
 }));
 
@@ -189,6 +192,29 @@ app.get("/api/conflicts", ah(async (req, res) => {
   res.json({ conflicts: await eventsInWindow(start, end, userOf(req)) });
 }));
 
+// ── AI 코멘트 (src/ai.js) ── GET은 저장된 것만(없으면 note=null), POST는 새로 만든다.
+// 피로도 숫자는 GET에서도 늘 새로 계산해 준다.
+app.get("/api/ai/day", ah(async (req, res) => {
+  res.json(await dayNote(userOf(req), req.query.date || todayStr()));
+}));
+app.post("/api/ai/day", ah(async (req, res) => {
+  res.json(await dayNote(userOf(req), req.body?.date || todayStr(), { force: true }));
+}));
+app.post("/api/ai/apply", ah(async (req, res) => {
+  const { date = todayStr(), ref = "", action } = req.body ?? {};
+  if (!/^[te]\d+$/.test(ref)) return res.status(400).json({ error: "ref가 이상해요" });
+  if (!(await applySuggestion(userOf(req), date, ref, action))) {
+    return res.status(400).json({ error: "적용할 수 없는 제안이에요 (필수이거나 이미 바뀜)" });
+  }
+  res.json({ ok: true });
+}));
+app.get("/api/ai/week", ah(async (req, res) => {
+  res.json(await weekReport(userOf(req), weekStart(req.query.date || todayStr())));
+}));
+app.post("/api/ai/week", ah(async (req, res) => {
+  res.json(await weekReport(userOf(req), weekStart(req.body?.date || todayStr()), { force: true }));
+}));
+
 // ── 텔레그램 알림 연결 (아이디별) ──
 app.post("/api/telegram/link", ah(async (req, res) => {
   const bot = await getBotUsername();
@@ -228,11 +254,11 @@ app.get("/api/events/:id", ah(async (req, res) => {
 }));
 
 app.put("/api/events/:id", ah(async (req, res) => {
-  const { title, start, end, rrule = null, allday = 0 } = req.body;
+  const { title, start, end, rrule = null, allday = 0, must = 0 } = req.body;
   if (!title || !start || !end) return res.status(400).json({ error: "title, start, end는 필수" });
   const r = await run(
-    'UPDATE events SET title = ?, start = ?, "end" = ?, rrule = ?, allday = ? WHERE id = ? AND "user" = ?',
-    [title, start, end, rrule, allday ? 1 : 0, req.params.id, userOf(req)]);
+    'UPDATE events SET title = ?, start = ?, "end" = ?, rrule = ?, allday = ?, must = ? WHERE id = ? AND "user" = ?',
+    [title, start, end, rrule, allday ? 1 : 0, must ? 1 : 0, req.params.id, userOf(req)]);
   if (r.changes === 0) return res.status(404).json({ error: "없는 일정" });
   res.json({ ok: true });
 }));
@@ -296,11 +322,12 @@ app.patch("/api/tasks/:id", ah(async (req, res) => {
   const done = "done" in b ? (b.done ? 1 : 0) : cur.done;
   const planAt = "plan_at" in b ? (b.plan_at || null) : cur.plan_at;
   const archived = "archived" in b ? (b.archived ? 1 : 0) : cur.archived;
+  const must = "must" in b ? (b.must ? 1 : 0) : cur.must;
   // 완료로 바뀌는 순간의 시각을 남긴다(되돌리면 지운다) — 나중에 "언제 해냈나"를 볼 수 있게
   const doneAt = done ? (cur.done ? cur.done_at : nowStamp()) : null;
-  await run(`UPDATE tasks SET title = ?, due = ?, done = ?, done_at = ?, plan_at = ?, archived = ?
+  await run(`UPDATE tasks SET title = ?, due = ?, done = ?, done_at = ?, plan_at = ?, archived = ?, must = ?
     WHERE id = ? AND "user" = ?`,
-    [title, due, done, doneAt, planAt, archived, req.params.id, user]);
+    [title, due, done, doneAt, planAt, archived, must, req.params.id, user]);
   res.json({ ok: true });
 }));
 

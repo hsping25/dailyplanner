@@ -126,6 +126,20 @@ export async function initDb() {
     title TEXT NOT NULL,
     done INTEGER NOT NULL DEFAULT 0
   )`);
+  // 필수 표시: AI가 계획 수정을 제안하지 않는 일정/할 일 (src/ai.js)
+  await addColumn("events", "must", "INTEGER NOT NULL DEFAULT 0");
+  await addColumn("tasks", "must", "INTEGER NOT NULL DEFAULT 0");
+  // AI 코멘트 저장. kind = day(key=날짜) | week(key=그 주 월요일). sig = 입력 데이터 지문 —
+  // 계획이 그대로면 API를 다시 부르지 않는다. body = JSON.
+  await run(`CREATE TABLE IF NOT EXISTS ai_notes (
+    "user" TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    key TEXT NOT NULL,
+    sig TEXT NOT NULL,
+    body TEXT NOT NULL,
+    created TEXT NOT NULL,
+    PRIMARY KEY ("user", kind, key)
+  )`);
   // 메모장: 자유 메모. kind='text'면 content는 글, 'draw'면 PNG 데이터 URL(손그림).
   // updated는 "YYYY-MM-DDTHH:MM" 로컬 시각(정렬용).
   await run(`CREATE TABLE IF NOT EXISTS memos (

@@ -87,7 +87,12 @@
     cursor: pointer;
     padding: 0;
   }
-  .icon-btn { font-size: 18px; }
+  .icon-btn { font-size: 18px; position: relative; }
+  /* 지난주 AI 리포트가 아직 안 열렸다는 표시 */
+  .icon-btn.dot::after {
+    content: ""; position: absolute; top: 6px; right: 6px;
+    width: 8px; height: 8px; border-radius: 50%; background: var(--warn);
+  }
   .datenav-mid {
     flex: 1;
     min-width: 0;
@@ -657,7 +662,45 @@
     border-radius: 20px 20px 0 0;
     padding: 22px 20px calc(22px + env(safe-area-inset-bottom));
   }
+  .sheet { max-height: 88vh; overflow-y: auto; }
   .sheet-title { font-size: 20px; font-weight: 800; margin-bottom: 16px; }
+  /* 필수 표시 — AI가 수정을 제안하지 않는다 */
+  .must-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px;
+    font-size: 16px; font-weight: 700; cursor: pointer; }
+  .must-row input { width: 22px; height: 22px; accent-color: var(--accent); margin: 0; }
+  .must-row small { font-weight: 500; color: var(--ink-dim); font-size: 13px; }
+
+  /* ── AI 코멘트 시트 ── */
+  .ai-tabs { margin-bottom: 16px; align-self: flex-start; display: inline-flex; }
+  .ai-fat { background: var(--card); border-radius: 14px; padding: 14px 16px; margin-bottom: 14px; }
+  .ai-fat .top-line { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+  .ai-fat b { font-size: 30px; font-variant-numeric: tabular-nums; }
+  .ai-fat .lv { font-size: 15px; font-weight: 700; color: var(--ink-dim); }
+  .ai-fat .bar { height: 8px; background: var(--line); border-radius: 99px; overflow: hidden; }
+  .ai-fat .bar i { display: block; height: 100%; background: var(--accent); }
+  .ai-fat.high .bar i { background: var(--warn); }
+  .ai-fat.high b { color: var(--warn); }
+  .ai-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .ai-chips span { font-size: 13px; color: var(--ink-dim); background: var(--bg); border-radius: 99px; padding: 4px 10px; }
+  .ai-text { font-size: 16px; line-height: 1.7; margin-bottom: 12px; white-space: pre-wrap; }
+  .ai-text.dim { color: var(--ink-dim); font-size: 15px; }
+  .ai-h { font-size: 14px; font-weight: 800; color: var(--ink-dim); margin: 16px 0 8px; }
+  .ai-sug { border: 1.5px solid var(--line); border-radius: 14px; padding: 12px 14px; margin-bottom: 8px; }
+  .ai-sug .t { font-size: 16px; font-weight: 700; }
+  .ai-sug .t em { font-style: normal; color: var(--accent); }
+  .ai-sug .r { font-size: 14px; color: var(--ink-dim); line-height: 1.6; margin: 4px 0 10px; }
+  .ai-sug button { border: none; border-radius: 10px; background: var(--accent); color: #fff;
+    font-family: inherit; font-size: 14px; font-weight: 700; padding: 8px 14px; cursor: pointer; }
+  .ai-sug button:disabled { background: var(--line); color: var(--ink-dim); cursor: default; }
+  .ai-list { margin: 0 0 4px; padding-left: 20px; font-size: 15px; line-height: 1.7; }
+  .ai-stats { font-size: 14px; color: var(--ink-dim); margin-bottom: 12px; }
+  .ai-stats b { color: var(--ink); font-size: 22px; }
+  .ai-head { font-size: 18px; font-weight: 800; line-height: 1.5; margin-bottom: 8px; }
+  .ai-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    font-size: 13px; color: var(--ink-dim); margin: 14px 0 6px; }
+  .ai-foot button { border: 1.5px solid var(--line); background: none; color: var(--ink);
+    font-family: inherit; font-size: 14px; font-weight: 700; border-radius: 10px; padding: 7px 12px; cursor: pointer; }
+  .ai-stale { font-size: 14px; color: var(--warn); font-weight: 700; margin-bottom: 10px; }
   .fld { display: block; margin-bottom: 14px; }
   .fld > span {
     display: block;
@@ -1155,6 +1198,7 @@
     </div>
     <button class="nav-arrow" id="day-next" aria-label="다음 날">›</button>
   </div>
+  <button class="icon-btn" id="ai-btn" aria-label="AI 코멘트">✨</button>
   <button class="icon-btn" id="bell-btn" aria-label="알림 연결">🔔</button>
   <button class="icon-btn" id="theme-btn" aria-label="테마 전환">🌙</button>
 </div>
@@ -1381,7 +1425,7 @@ const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(
 const todayStr = data.date;        // 서버 기준 논리적 오늘(새벽 4시 경계)
 let viewDate = data.date;
 let events = [], tasks = [], weekData = [], taskById = new Map();
-let scores = [], dayLogRow = null, streakN = 0, goals = [];
+let scores = [], dayLogRow = null, streakN = 0, goals = [], aiWeekPending = false;
 
 function applyData(d) {
   viewDate = d.date;
@@ -1394,6 +1438,7 @@ function applyData(d) {
   dayLogRow = d.log ?? null;
   streakN = d.streak ?? 0;
   goals = d.goals ?? [];
+  aiWeekPending = !!d.aiWeekPending;
 }
 // 화살표를 연타하면 요청이 겹친다. 마지막 요청만 화면에 반영하고 늦게 온 응답은 버린다.
 let loadSeq = 0;
@@ -1408,6 +1453,7 @@ applyData(data);
 
 // 테마(라이트/다크) 토글 — 저장된 선택이 시스템 설정을 덮어씀
 const themeBtn = document.getElementById("theme-btn");
+const aiBtn = document.getElementById("ai-btn");   // ✨ AI 코멘트 (시트는 맨 아래 절)
 function applyTheme(t) {
   if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
   else document.documentElement.removeAttribute("data-theme"); // 시스템 따라감
@@ -1771,6 +1817,7 @@ function renderAll() {
   updateWtTitle();
   renderWeekStrip();
   renderGoals();
+  aiBtn.classList.toggle("dot", aiWeekPending);
 }
 
 // ── 위임 핸들러 (한 번만 붙임; innerHTML이 바뀌어도 유지됨) ──
@@ -2658,6 +2705,7 @@ async function openEventEditor(eventId, occurrenceDate) {
       <label class="fld"><span>시작</span><input id="m-start" type="time" value="${sTime}"></label>
       <label class="fld"><span>종료</span><input id="m-end" type="time" value="${eTime}"></label>
     </div>`;
+  body += mustRow(ev.must);
   body += `<div class="sheet-btns">
       <button class="ok" id="m-save">저장</button>
       ${recurring ? `<button class="no" id="m-skip">이 날짜만 빼기</button>` : ""}
@@ -2683,6 +2731,7 @@ async function openEventEditor(eventId, occurrenceDate) {
       const endDate = et <= st ? addDayStr(baseDate) : baseDate; // 자정 넘기면 종료는 다음날
       payload = { title, start: `${baseDate}T${st}`, end: `${endDate}T${et}`, rrule: ev.rrule || null, allday: 0 };
     }
+    payload.must = document.getElementById("m-must").checked;
     await apiFetch(`/api/events/${eventId}`, {
       method: "PUT", headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -2703,6 +2752,10 @@ async function openEventEditor(eventId, occurrenceDate) {
   };
 }
 
+// 필수 표시 — 켜 두면 AI가 이 항목의 수정(미루기·빼기)을 제안하지 않는다
+const mustRow = on => `<label class="must-row"><input type="checkbox" id="m-must"${on ? " checked" : ""}>
+  🔒 필수 <small>AI가 옮기자고 하지 않아요</small></label>`;
+
 function openTaskEditor(task) {
   if (!task) return;
   // "언제 할지"를 정해 두는 칸. 마감(언제까지)과 다르다 — 이게 있어야 실제로 하게 된다.
@@ -2716,6 +2769,7 @@ function openTaskEditor(task) {
       <label class="fld"><span>시각</span><input id="m-plan-time" type="time" value="${planTime}"></label>
     </div>
     <div class="cp-help">시각을 넣으면 시간표에 옅은 블록으로 뜨고, 비우면 계획을 지웁니다.</div>
+    ${mustRow(task.must)}
     ${task.spent_min ? `<div class="fld-note">⏱ 지금까지 ${task.spent_min}분 집중</div>` : ""}
     <div class="sheet-btns">
       <button class="ok" id="m-save">저장</button>
@@ -2731,7 +2785,8 @@ function openTaskEditor(task) {
     const pt = document.getElementById("m-plan-time").value;
     await apiFetch(`/api/tasks/${task.id}`, {
       method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, due, plan_at: pd && pt ? `${pd}T${pt}` : null }),
+      body: JSON.stringify({ title, due, plan_at: pd && pt ? `${pd}T${pt}` : null,
+        must: document.getElementById("m-must").checked }),
     });
     closeSheet(); loadDay(viewDate);
   };
@@ -2848,6 +2903,145 @@ goalsEl.addEventListener("click", async ev => {
     body: JSON.stringify({ done: willDone }),
   }).catch(() => {});
 });
+
+// ───────── ✨ AI 코멘트 ─────────
+// 피로도 숫자는 서버가 계산하고, AI는 그걸 읽고 말로 풀어 준다. 버튼을 눌렀을 때만 AI를 부른다.
+// 저장된 코멘트가 있으면 그걸 보여 주고(계획이 바뀌었으면 "다시 분석" 안내), 없으면 새로 만든다.
+const ACTION_LABEL = { tomorrow: "내일로", week: "이번 주 안으로", skip: "이 날만 빼기" };
+const weekMon = ds => shiftStr(ds, -((dateObj(ds).getDay() + 6) % 7));
+const fmtStamp = s => s ? `${Number(s.slice(5, 7))}/${Number(s.slice(8, 10))} ${s.slice(11, 16)}` : "";
+
+aiBtn.onclick = () => {
+  // 지난주 리포트가 기다리고 있으면 주간 탭(지난주)부터 연다
+  if (aiWeekPending) openAi("week", shiftStr(weekMon(todayStr), -7));
+  else openAi("day");
+};
+
+function openAi(tab, weekDate = viewDate) {
+  showSheet(`<div class="sheet-title">✨ AI 코멘트</div>
+    <div class="switch ai-tabs" id="ai-tabs">
+      <button data-t="day"${tab === "day" ? ' class="on"' : ""}>하루</button>
+      <button data-t="week"${tab === "week" ? ' class="on"' : ""}>주간</button>
+    </div>
+    <div id="ai-body"></div>
+    <div class="sheet-btns"><button class="no" id="ai-close">닫기</button></div>`);
+  document.getElementById("ai-close").onclick = closeSheet;
+  document.getElementById("ai-tabs").onclick = ev => {
+    const b = ev.target.closest("button");
+    if (!b) return;
+    sheetEl.querySelectorAll("#ai-tabs button").forEach(x => x.classList.toggle("on", x === b));
+    b.dataset.t === "day" ? aiDay() : aiWeek(viewDate);
+  };
+  tab === "day" ? aiDay() : aiWeek(weekDate);
+}
+
+const aiBody = () => document.getElementById("ai-body");
+const aiLoading = msg => { const el = aiBody(); if (el) el.innerHTML = `<div class="cp-loading">${msg}</div>`; };
+async function aiCall(url, body) {
+  const r = await apiFetch(url, body ? {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+  } : {});
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.error || "AI 요청 실패");
+  return j;
+}
+const aiError = e => { const el = aiBody(); if (el) el.innerHTML = `<div class="cp-error">${esc(e.message)}</div>`; };
+
+async function aiDay(force = false) {
+  const date = viewDate;
+  aiLoading(force ? "AI가 하루를 읽는 중… (10초쯤)" : "불러오는 중…");
+  try {
+    let d = await aiCall(`/api/ai/day?date=${date}`);
+    if (!d.note && d.ready && !force) { aiLoading("AI가 하루를 읽는 중… (10초쯤)"); force = true; }
+    if (force) d = await aiCall("/api/ai/day", { date });
+    renderAiDay(d);
+  } catch (e) { aiError(e); }
+}
+
+function renderAiDay(d) {
+  const el = aiBody();
+  if (!el) return;
+  const f = d.fatigue, n = d.note;
+  const o = dateObj(d.date);
+  let html = `<div class="ai-fat${f.level === "빡빡" ? " high" : ""}">
+      <div class="top-line"><b>${f.score}</b><span class="lv">피로도 · ${f.level} · ${o.getMonth() + 1}/${o.getDate()}</span></div>
+      <div class="bar"><i style="width:${f.score}%"></i></div>
+      ${f.factors.length ? `<div class="ai-chips">${f.factors.map(x => `<span>${esc(x)}</span>`).join("")}</div>` : ""}
+    </div>`;
+  if (!d.ready) {
+    html += `<div class="ai-text dim">AI 키가 설정되지 않아 숫자만 보여요. 서버 환경변수에 GEMINI_API_KEY를 넣으면 코멘트가 나와요.</div>`;
+  } else if (n) {
+    if (d.stale) html += `<div class="ai-stale">계획이 바뀌었어요. 다시 분석하면 지금 계획으로 봐 줘요.</div>`;
+    html += `<div class="ai-text">${esc(n.summary)}</div>`;
+    if (n.fatigueText) html += `<div class="ai-text dim">${esc(n.fatigueText)}</div>`;
+    if (n.suggestions.length) {
+      html += `<div class="ai-h">이렇게 줄여 보면 어때요</div>` + n.suggestions.map(s => `<div class="ai-sug">
+          <div class="t">${esc(s.title)} → <em>${ACTION_LABEL[s.action] ?? s.action}</em></div>
+          <div class="r">${esc(s.reason)}</div>
+          <button data-ref="${s.ref}" data-a="${s.action}"${d.stale ? " disabled" : ""}>적용</button>
+        </div>`).join("");
+    }
+    html += `<div class="ai-foot"><span>${fmtStamp(n.created)} 분석</span><button id="ai-redo">다시 분석</button></div>`;
+  }
+  el.innerHTML = html;
+  document.getElementById("ai-redo")?.addEventListener("click", () => aiDay(true));
+  el.querySelectorAll(".ai-sug button").forEach(b => b.onclick = async () => {
+    b.disabled = true;
+    try {
+      await aiCall("/api/ai/apply", { date: d.date, ref: b.dataset.ref, action: b.dataset.a });
+      b.textContent = "적용됨";
+      loadDay(viewDate);
+    } catch (e) { b.disabled = false; alert(e.message); }
+  });
+}
+
+async function aiWeek(date, force = false) {
+  const monday = weekMon(date);
+  aiLoading(force ? "AI가 한 주를 정리하는 중… (10~20초)" : "불러오는 중…");
+  try {
+    let w = await aiCall(`/api/ai/week?date=${monday}`);
+    // 기록이 없는 주는 AI를 부르지 않는다
+    if (!w.report && w.ready && !force && w.stats.planned > 0) { aiLoading("AI가 한 주를 정리하는 중… (10~20초)"); force = true; }
+    if (force) w = await aiCall("/api/ai/week", { date: monday });
+    renderAiWeek(w);
+    if (monday === shiftStr(weekMon(todayStr), -7) && w.report) {
+      aiWeekPending = false;
+      aiBtn.classList.remove("dot");
+    }
+  } catch (e) { aiError(e); }
+}
+
+function renderAiWeek(w) {
+  const el = aiBody();
+  if (!el) return;
+  const st = w.stats, r = w.report;
+  const mo = dateObj(w.monday), su = dateObj(shiftStr(w.monday, 6));
+  const range = `${mo.getMonth() + 1}/${mo.getDate()} ~ ${su.getMonth() + 1}/${su.getDate()}`;
+  const fh = m => m >= 60 ? `${Math.floor(m / 60)}시간${m % 60 ? ` ${m % 60}분` : ""}` : `${m}분`;
+  let html = `<div class="ai-foot" style="margin-top:0">
+      <button id="ai-wprev">‹ 이전 주</button><span>${range}${st.inProgress ? " · 진행 중" : ""}</span>
+      <button id="ai-wnext"${w.monday >= weekMon(todayStr) ? " disabled" : ""}>다음 주 ›</button>
+    </div>
+    <div class="ai-stats">달성률 <b>${st.ratio ?? "-"}${st.ratio == null ? "" : "%"}</b>
+      ${st.prevRatio != null ? ` · 지난주 ${st.prevRatio}%` : ""} · 완료 ${st.done}/${st.planned}
+      ${st.focusMin ? ` · 집중 ${fh(st.focusMin)}` : ""}</div>`;
+  if (!r && !st.planned) {
+    html += `<div class="ai-text dim">이 주엔 기록이 없어요.</div>`;
+  } else if (!w.ready) {
+    html += `<div class="ai-text dim">AI 키가 설정되지 않아 숫자만 보여요.</div>`;
+  } else if (r) {
+    if (w.stale) html += `<div class="ai-stale">그 뒤로 기록이 바뀌었어요. 다시 만들면 반영돼요.</div>`;
+    const list = (title, arr) => arr.length ? `<div class="ai-h">${title}</div><ul class="ai-list">${arr.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : "";
+    html += `<div class="ai-head">${esc(r.headline)}</div>
+      <div class="ai-text">${esc(r.summary)}</div>
+      ${list("잘한 점", r.good)}${list("아쉬운 점", r.improve)}${list(st.inProgress ? "남은 날에" : "다음 주에", r.next)}
+      <div class="ai-foot"><span>${fmtStamp(r.created)} 작성</span><button id="ai-wredo">다시 만들기</button></div>`;
+  }
+  el.innerHTML = html;
+  document.getElementById("ai-wprev").onclick = () => aiWeek(shiftStr(w.monday, -7));
+  document.getElementById("ai-wnext").onclick = () => aiWeek(shiftStr(w.monday, 7));
+  document.getElementById("ai-wredo")?.addEventListener("click", () => aiWeek(w.monday, true));
+}
 
 // 서비스워커 등록 — 홈 화면 설치 + 오프라인 껍데기
 if ("serviceWorker" in navigator) {

@@ -16,4 +16,10 @@ services:
         sync: false             # 없으면 로컬 SQLite로 동작(개발용). 배포엔 반드시 넣기.
       - key: TELEGRAM_BOT_TOKEN # 봇 토큰 (대시보드에서 직접 입력, 커밋 금지)
         sync: false
+      - key: GEMINI_API_KEY     # ✨ AI 코멘트용 (대시보드에서 직접 입력, 커밋 금지). 없으면 피로도 숫자만 보임.
+        sync: false
+      - key: LLM_PROVIDER       # gemini | anthropic | openai
+        value: gemini
+      - key: LLM_MODEL
+        value: gemini-3-flash-preview
       # TELEGRAM_CHAT_ID 는 선택 — 넣으면 '기본' 아이디에 자동 연결(레거시). 보통은 앱 🔔로 연결.

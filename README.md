@@ -1,7 +1,7 @@
 # 오늘 — 한국어 일일 플래너
 
 한국어 문장으로 일정을 등록하고, 오늘 할 일을 한눈에 보는 개인용 웹앱.
-문장 파싱은 **정규식 전용**(외부 AI API 없음), 저장은 **SQLite 파일 하나**, 알림은 **텔레그램**.
+문장 파싱은 **정규식 전용**(AI는 ✨ 코멘트에만), 저장은 **SQLite 파일 하나**, 알림은 **텔레그램**.
 
 ## 기능
 - 한국어 자연어 입력: "내일 저녁 7시 헬스", "매주 화목 아침 7시 운동", "수학 숙제 금요일까지"
@@ -24,6 +24,13 @@
 - **주간 목표**: 시간표 뷰 맨 위에 이번 주 목표 3개. 일요일 밤에 주간 회고가 온다.
 - **밀린 건 방치되지 않는다**: 3일 넘게 밀린 할 일을 아침에 하나씩 "아직 할 거예요?" 하고 물어본다.
 
+### ✨ AI 코멘트 (내 API 키)
+- 위쪽 ✨를 누르면 **하루 요약 + 피로도(0~100) + 계획 수정 제안**. 피로도는 앱이 계산한 숫자이고(일정 시간·남은 할 일·밤늦은 일정·붙은 일정·어제 기분), AI는 그걸 말로 풀어 준다.
+- 제안은 **적당히**: 여유로운 날엔 0개, 보통 1개, 빡빡할 때 최대 3개. [적용]을 누르면 바로 옮겨진다.
+- 일정·할 일 수정 화면의 **🔒 필수**를 켜 두면 AI가 그 항목은 절대 옮기자고 하지 않는다.
+- **주간 리포트**: 주간 탭에서 한 주의 달성률·회고를 종합한 리포트. 지난주를 닫아 둔 기록이 있는데 아직 안 봤으면 ✨에 빨간 점이 뜬다.
+- AI는 누를 때만 부른다. 결과는 저장해 두고, 계획이 그대로면 다시 부르지 않는다.
+
 ## 로컬 실행
 ```bash
 npm install
@@ -38,13 +45,16 @@ TELEGRAM_BOT_TOKEN=   # @BotFather로 봇 만들고 받은 토큰
 TELEGRAM_CHAT_ID=     # 봇에게 메시지 한 번 보낸 뒤 npm run brief 하면 안내됨
 NOTIFY_USER=기본       # 알림을 보낼 아이디
 TZ=Asia/Seoul         # (클라우드에서 필수) 날짜/알림 시각 기준
+GEMINI_API_KEY=       # ✨ AI 코멘트용 (없으면 피로도 숫자만 보임)
+LLM_PROVIDER=gemini   # gemini | anthropic | openai
+LLM_MODEL=gemini-3-flash-preview
 ```
 
 ## Render 배포 (무료 티어)
 1. 이 저장소를 GitHub에 올린다.
 2. Render 대시보드 → **New + → Blueprint** → 이 저장소 선택 (`render.yaml` 자동 인식).
    - 또는 **New + → Web Service**: Build `npm install`, Start `npm start`, Health Check Path `/healthz`.
-3. 환경변수에 `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` 입력. `TZ=Asia/Seoul`, `NOTIFY_USER`는 blueprint에 이미 있음.
+3. 환경변수에 `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `GEMINI_API_KEY` 입력. `TZ=Asia/Seoul`, `NOTIFY_USER`는 blueprint에 이미 있음.
 4. 배포되면 나오는 `https://...onrender.com` 주소를 폰에서 열고 홈 화면에 추가.
 
 ### 데이터 영구 보존 — 무료 Postgres(Neon)

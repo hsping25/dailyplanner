@@ -22,7 +22,7 @@
 - **색 팔레트 고정:** 파랑(--accent)=단발 일정, 청록(--accent2)=반복 일정, 빨강(--warn)=지난 할 일. 이 셋 외의 색은 추가하지 않는다.
 - **API 키는 서버 환경변수(.env)로.** 코드에 하드코딩 금지. `.env`는 `.gitignore`에 포함.
 - 반복 일정은 날짜마다 복사해 저장하지 않는다. RRULE 문자열 하나만 저장하고 화면에 그릴 때 펼친다(`rrule` 라이브러리 사용). 예외(건너뛰기/수정)는 별도 목록으로 관리.
-- 문장 파싱은 **정규식 전용**(`parseText(text, history)`, src/parse.js). LLM/API 키 사용 안 함. 못 알아들으면 `{kind:"unparsed"}` → 프론트가 "다시 말해 주세요" 안내.
+- 문장 파싱은 **정규식 전용**(`parseText(text, history)`, src/parse.js). LLM/API 키 사용 안 함(LLM은 ✨ AI 코멘트에만 쓴다). 못 알아들으면 `{kind:"unparsed"}` → 프론트가 "다시 말해 주세요" 안내.
 - 핵심 구분: **시각 있으면 일정 / 시각 없으면 할 일**(날짜 있으면 그날이 마감). "동안"·시간범위 = 기간.
 - 날짜: 오늘/내일/모레/글피, N월N일, `7/16`·`7-16`·`2026-07-16`, `16일`, `3일 뒤/안에`, 다음달N일, (다음/이번/저번)주 요일.
 - 시각: 오전/오후/아침/점심/저녁/밤/새벽/낮 + N시(반/N분/정각), `14:30` 콜론(24시제·안 물음), 한글숫자(세시), 자정/정오. 범위 `2시~4시`·`2시부터 4시까지`·`14:00-16:00`.
@@ -51,6 +51,7 @@
   - `plan_at`: "언제 할지" 정해 둔 시각("YYYY-MM-DDTHH:MM"). 마감(언제까지)과 다르다. 일정이 아니라 계획이라 시간표엔 점선 블록으로.
   - `done_at`(완료 시각), `spent_min`(타이머 누적 집중 분), `archived`(하루 닫기에서 버린 것 — 지우지 않고 숨김), `asked_at`(밀린 할 일을 언제 물어봤나)
 - day_log(user, date): 하루 닫기 기록. planned/done/star_planned/star_done은 **닫는 순간의 스냅샷**(나중에 할 일을 지워도 그날 성적은 남는다) + note(스스로 쓴 회고 한 줄) + mood(1~5) + closed_at.
+- events/tasks의 `must`(필수, 0/1): AI가 수정을 제안하지 않는 항목. ai_notes: AI 코멘트 저장(아래 8단계).
 - goals(user, week, title, done): 주간 목표. week = 그 주 월요일 날짜. 한 주 최대 3개(서버가 막음).
 - memo: user, kind(text|draw), 내용(text=글, draw=PNG 데이터 URL), updated(수정 시각 — 최근 수정순 정렬용). API: /api/memos CRUD. 그림 때문에 express.json limit 5mb.
 - 시각은 로컬 시각 문자열 "YYYY-MM-DDTHH:MM"로 저장 (KST 고정)
@@ -127,6 +128,14 @@
 6. ✅ PWA — public/manifest.json, public/sw.js, public/icons/ (아이콘 생성기: scripts/gen-icons.mjs).
    index.html에 manifest 링크 + theme-color(라이트/다크) + apple-touch-icon + SW 등록.
    SW는 /api/* 는 캐시하지 않음(항상 최신). 배포는 아래 "배포" 절 참고.
+8. ✅ AI 코멘트 — src/ai.js. 헤더의 ✨ → 바텀시트 [하루 | 주간]. **앱에서만, 누를 때만** AI를 부른다(텔레그램·백그라운드 없음).
+   - **숫자는 코드가, 말은 AI가.** 피로도 `fatigue()`(0~100, 순수 계산: 합친 일정 시간·남은 할 일·23시 넘는 일정·7시 전 일정·10분 안에 붙은 일정·어제 기분/바쁨)와 달성률은 서버가 계산해 넘기고, AI는 인용만 한다. 수준 여유(<40)/보통/빡빡(≥70).
+   - 수정 제안 상한은 피로도 수준으로: 여유 0 · 보통 1 · 빡빡 3. 지난 날은 0. 후보는 `must=0`, 미완료, (오늘이면) 아직 시작 안 한 것만. **AI 응답은 서버가 다시 거른다**(모르는 ref, 필수, 맞지 않는 action, 상한 초과 → 버림).
+   - action: 할 일 tomorrow/week(= applyActions), 단발 일정 tomorrow(같은 시각 +1일), 반복 일정 skip(그 회차 예외). POST /api/ai/apply가 must를 다시 확인.
+   - **필수 표시**: events.must / tasks.must. 수정 시트의 "🔒 필수" 체크. AI가 손대지 않는다는 뜻일 뿐 다른 동작은 없다.
+   - 캐시: ai_notes(user, kind=day|week, key=날짜|월요일, sig, body JSON, created). sig = 입력 데이터 지문. GET은 저장된 것만(+stale 여부, 피로도는 늘 새로 계산), POST가 새로 생성. 저장된 게 없으면 클라이언트가 자동으로 POST, 있으면 "다시 분석" 버튼.
+   - 주간 리포트는 진행 중인 주면 **오늘까지만** 센다(안 온 날을 못 한 날로 치지 않게). 기록이 없는 주는 AI를 부르지 않는다. 지난주를 하루라도 닫았는데 리포트가 없으면 /api/day의 aiWeekPending → ✨에 빨간 점.
+   - 제공자: env LLM_PROVIDER(gemini 기본|anthropic|openai) + LLM_MODEL + 해당 키. fetch만 사용(SDK 없음). 키가 없으면 피로도 숫자만 보인다.
 
 ## 배포 (Render + UptimeRobot) — README.md에 사용자용 안내 있음
 - 실행: `npm start`(=node src/server.js, 프로덕션). 로컬 개발은 `npm run dev`(nodemon). Node 24 필수(node:sqlite). `.node-version`=24, engines 지정.
