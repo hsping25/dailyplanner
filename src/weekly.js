@@ -2,7 +2,8 @@
 // 다음 주 목표는 앱에서 고르게 한다(세 개를 고르는 건 손으로 하는 게 낫다).
 import { all } from "./db.js";
 import { weekStart, shiftDate } from "./day.js";
-import { scoresBetween, ratio, streak } from "./review.js";
+import { scoresBetween, ratio } from "./review.js";
+import { streak } from "./attend.js";
 import { sendTelegram } from "./telegram.js";
 
 const DAY = ["월", "화", "수", "목", "금", "토", "일"];

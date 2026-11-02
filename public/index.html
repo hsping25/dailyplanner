@@ -418,6 +418,14 @@
     cursor: pointer;
   }
   .dayscore button.closed { background: var(--line); color: var(--ink-dim); }
+  .dayscore button:disabled { opacity: 0.4; cursor: default; }
+  /* 공부 세션 줄 — 성적 바와 같은 모양, 바로 아래 */
+  .attend .what { flex: 1; min-width: 0; font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .attend .what em { font-style: normal; font-weight: 600; font-size: 13px; color: var(--ink-dim); }
+  /* 금색 불꽃: 새 색을 들이지 않고 🔥 이모지를 금빛으로 돌린다. 그날 핵심을 다 했을 때만. */
+  .streak.gold { filter: hue-rotate(25deg) saturate(1.8) brightness(1.15); }
+  .att-err { color: var(--warn); font-size: 14px; margin: -6px 0 12px; min-height: 1em; }
   .dayscore .note { font-size: 14px; color: var(--ink-dim); flex: 1; min-width: 0;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -1214,6 +1222,7 @@
 
 <div class="next" id="next-event"></div>
 <div class="dayscore" id="dayscore" hidden></div>
+<div class="dayscore attend" id="attend" hidden></div>
 
 <div id="view-list">
   <section class="focus3" id="focus3">
@@ -1426,6 +1435,7 @@ const todayStr = data.date;        // 서버 기준 논리적 오늘(새벽 4시
 let viewDate = data.date;
 let events = [], tasks = [], weekData = [], taskById = new Map();
 let scores = [], dayLogRow = null, streakN = 0, goals = [], aiWeekPending = false;
+let attend = null, attSkew = 0;   // 공부 세션 상태 + 서버 시계와의 차이(ms)
 
 function applyData(d) {
   viewDate = d.date;
@@ -1439,6 +1449,7 @@ function applyData(d) {
   streakN = d.streak ?? 0;
   goals = d.goals ?? [];
   aiWeekPending = !!d.aiWeekPending;
+  if (d.attend) setAttend(d.attend);
 }
 // 화살표를 연타하면 요청이 겹친다. 마지막 요청만 화면에 반영하고 늦게 온 응답은 버린다.
 let loadSeq = 0;
@@ -1652,9 +1663,99 @@ function renderDayScore() {
   dayScoreEl.innerHTML = `
     <div class="num">${s.done}/${s.planned}${s.dropped ? ` <em>버림 ${s.dropped}</em>` : ""}</div>
     ${note || `<div class="bar"><i style="width:${pct}%"></i><u style="width:${dropPct}%"></u></div>`}
-    ${streakN >= 2 && viewDate === todayStr ? `<div class="streak">🔥${streakN}</div>` : ""}
     <button id="close-day" class="${closed ? "closed" : ""}">${closed ? "다시 닫기" : "하루 닫기"}</button>`;
   document.getElementById("close-day").onclick = openCloseDay;
+}
+
+// ── 공부 세션 줄 ── 오늘 2/3회 + 🔥연속 + 시작/완료. 시간은 서버 시계로 잰다.
+// 규칙은 src/attend.js: 10분 이상만 유효, 3회(또는 30분 1회)면 출석, 6시간 넘으면 미완료.
+const attendEl = document.getElementById("attend");
+const ATT_MIN_MS = 10 * 60_000, ATT_EXPIRE_MS = 6 * 3600_000;
+let attTick = null;
+function setAttend(a) { attend = a; attSkew = a.serverNow - Date.now(); }
+const attElapsed = () => attend?.open ? Date.now() + attSkew - attend.open.started_ms : 0;
+const fmtClock = ms => {
+  const t = Math.floor(ms / 1000), h = Math.floor(t / 3600), m = Math.floor(t / 60) % 60, s = t % 60;
+  return h ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+};
+// 금색 불꽃 = 출석과 별개로, 오늘 정한 핵심을 전부 끝냈을 때만
+function goalDoneToday() {
+  const s = scoreOf(todayStr);
+  return !!s && s.starPlanned > 0 && s.starDone >= s.starPlanned;
+}
+function renderAttend() {
+  clearInterval(attTick); attTick = null;
+  const hidden = !attend || viewDate !== todayStr || ["memo", "timer"].includes(localStorage.getItem("view"));
+  attendEl.hidden = hidden;
+  if (hidden) return;
+  const flame = attend.streak >= 1
+    ? `<div class="streak ${goalDoneToday() ? "gold" : ""}">🔥${attend.streak}</div>` : "";
+  if (attend.open) {
+    const el = attElapsed();
+    if (el >= ATT_EXPIRE_MS) { refreshAttend(); return; }   // 6시간 넘음 → 서버가 미완료 처리
+    attendEl.innerHTML = `
+      <div class="what">📚 공부 중 <span id="att-clock">${fmtClock(el)}</span></div>
+      <button id="att-cancel" class="closed">취소</button>
+      <button id="att-finish" ${el < ATT_MIN_MS ? "disabled" : ""}>${el < ATT_MIN_MS ? "10분부터 완료" : "완료"}</button>`;
+    attTick = setInterval(() => {
+      const e = attElapsed();
+      if (e >= ATT_EXPIRE_MS) return renderAttend();
+      document.getElementById("att-clock").textContent = fmtClock(e);
+      const b = document.getElementById("att-finish");
+      if (b.disabled && e >= ATT_MIN_MS) { b.disabled = false; b.textContent = "완료"; }
+    }, 1000);
+    document.getElementById("att-cancel").onclick = async () => {
+      if (!confirm("이 세션을 취소할까요? 기록에 들어가지 않아요.")) return;
+      await attendPost(`/api/attend/${attend.open.id}/cancel`).catch(e => alert(e.message));
+    };
+    document.getElementById("att-finish").onclick = openAttendFinish;
+    return;
+  }
+  const head = attend.attended ? `📚 오늘 출석 ✓` : `📚 오늘 ${attend.count}/${attend.need}회`;
+  // 끊긴 다음 날이면 복구 안내(5회), 아니면 30분 한 번으로도 된다는 안내
+  const hint = attend.recover ? `${attend.count}/${attend.recover.need}회면 🔥${attend.recover.prev + 2} 복구`
+    : attend.attended ? `${attend.count}회` : "30분이면 1회로";
+  const what = `${head} <em>· ${hint}</em>`;
+  attendEl.innerHTML = `<div class="what">${what}</div>${flame}<button id="att-start">▶ 공부 시작</button>`;
+  document.getElementById("att-start").onclick = () => attendPost("/api/attend/start").catch(e => alert(e.message));
+}
+async function attendPost(url, body) {
+  const res = await apiFetch(url, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body ?? {}),
+  });
+  const j = await res.json();
+  if (!res.ok) { await refreshAttend(); throw new Error(j.error ?? "실패"); }
+  setAttend(j);
+  streakN = j.streak;
+  renderAttend();
+  return j;
+}
+async function refreshAttend() {
+  try { setAttend(await (await apiFetch("/api/attend")).json()); } catch { return; }
+  renderAttend();
+}
+function openAttendFinish() {
+  showSheet(`<div class="sheet-title">무엇을 공부했나요?</div>
+    <label class="fld"><span>한 줄 (5자 이상)</span><input id="att-note" maxlength="200" autocomplete="off"></label>
+    <div class="att-err" id="att-err"></div>
+    <div class="sheet-btns"><button class="ok" id="att-ok" disabled>완료</button><button class="no" id="att-back">닫기</button></div>`);
+  const input = document.getElementById("att-note"), ok = document.getElementById("att-ok");
+  const valid = () => [...input.value.trim()].length >= 5;
+  input.oninput = () => { ok.disabled = !valid(); };
+  input.onkeydown = e => { if (e.key === "Enter" && valid()) ok.click(); };
+  document.getElementById("att-back").onclick = closeSheet;
+  ok.onclick = async () => {
+    ok.disabled = true;
+    try {
+      const j = await attendPost(`/api/attend/${attend.open.id}/finish`, { note: input.value });
+      closeSheet();
+      if (j.recovered) alert(`끊겼던 ${j.recovered.slice(5).replace("-", "/")}을 메웠어요. 🔥${j.streak}일 연속!`);
+    } catch (e) {
+      document.getElementById("att-err").textContent = e.message;
+      ok.disabled = !valid();
+    }
+  };
+  input.focus();
 }
 
 // ── 주간 시간표 (블록 모드) — 오전 6시 ~ 다음날 오전 4시, 7일 한눈에 ──
@@ -1809,6 +1910,7 @@ function renderAll() {
   renderDateNav();
   renderHero();
   renderDayScore();
+  renderAttend();
   renderFocus3();
   renderEvents();
   renderTasks();
@@ -1900,6 +2002,7 @@ function refreshScores() {
       scores = j.scores ?? scores;
       streakN = j.streak ?? streakN;
       renderDayScore();
+      renderAttend();     // 핵심을 다 하면 불꽃이 금색으로
       renderWeekStrip();
     } catch {}
   }, 400);
@@ -1946,6 +2049,8 @@ function showView(name) {
   chatBarEl.style.display = hideDate ? "none" : "";
   if (hideDate) dayScoreEl.style.display = "none";
   else { dayScoreEl.style.display = ""; renderDayScore(); }
+  localStorage.setItem("view", name);
+  renderAttend();
   if (name === "memo") loadMemos();
   localStorage.setItem("view", name);
 }

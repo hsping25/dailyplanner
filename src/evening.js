@@ -5,7 +5,8 @@
 // 진행 상태는 kv 테이블에 chat별로 저장해서 서버가 재시작돼도 이어진다.
 import { get, run } from "./db.js";
 import { todayStr } from "./day.js";
-import { dayScore, leftovers, ratio, closeDay, applyActions, streak, dayLog } from "./review.js";
+import { dayScore, leftovers, ratio, closeDay, applyActions, dayLog } from "./review.js";
+import { streak } from "./attend.js";
 import { sendTelegram, api, keyboard, editMessage, answerCallback, forceReply } from "./telegram.js";
 
 const DAY = ["일", "월", "화", "수", "목", "금", "토"];

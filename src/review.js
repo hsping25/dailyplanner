@@ -178,21 +178,3 @@ export async function scoresBetween(user, from, to, loaded, byDay = null) {
   }
   return out;
 }
-
-// 연속 기록: 오늘(또는 어제)부터 거슬러 올라가며 "닫았고 절반 이상 해낸 날"이 며칠 이어졌나.
-// 오늘은 아직 안 닫았을 수 있으니 어제부터 세되, 오늘 이미 닫았으면 오늘부터 센다.
-export async function streak(user, today = todayStr()) {
-  const rows = await all(
-    'SELECT date, planned, done FROM day_log WHERE "user" = ? AND closed_at IS NOT NULL AND date <= ? ORDER BY date DESC LIMIT 400',
-    [user, today]);
-  const byDate = new Map(rows.map(r => [r.date, r]));
-  let d = byDate.has(today) ? today : shiftDate(today, -1);
-  let n = 0;
-  while (byDate.has(d)) {
-    const r = byDate.get(d);
-    if (!(r.planned > 0 && r.done * 2 >= r.planned)) break;
-    n++;
-    d = shiftDate(d, -1);
-  }
-  return n;
-}

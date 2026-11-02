@@ -140,6 +140,27 @@ export async function initDb() {
     created TEXT NOT NULL,
     PRIMARY KEY ("user", kind, key)
   )`);
+  // 공부 세션(src/attend.js). 시각은 서버 시계 ms. date = 시작 시각 기준 하루(04시 경계).
+  // status: open(진행 중) | done | canceled | expired(6시간 안에 완료 안 함)
+  await run(`CREATE TABLE IF NOT EXISTS study_sessions (
+    id ${AUTO},
+    "user" TEXT NOT NULL,
+    date TEXT NOT NULL,
+    started_ms BIGINT NOT NULL,
+    ended_ms BIGINT,
+    note TEXT,
+    status TEXT NOT NULL DEFAULT 'open'
+  )`);
+  // 진행 중인 세션은 아이디당 하나 — 동시에 두 번 눌러도 DB가 하나만 받는다
+  await run(`CREATE UNIQUE INDEX IF NOT EXISTS study_one_open ON study_sessions ("user") WHERE status = 'open'`);
+  await run(`CREATE INDEX IF NOT EXISTS study_by_date ON study_sessions ("user", date)`);
+  // 연속 기록 복구: date = 메운(끊겼던) 날, used_on = 복구한 날(한 달 1회 판정용)
+  await run(`CREATE TABLE IF NOT EXISTS streak_recover (
+    "user" TEXT NOT NULL,
+    date TEXT NOT NULL,
+    used_on TEXT NOT NULL,
+    PRIMARY KEY ("user", date)
+  )`);
   // 메모장: 자유 메모. kind='text'면 content는 글, 'draw'면 PNG 데이터 URL(손그림).
   // updated는 "YYYY-MM-DDTHH:MM" 로컬 시각(정렬용).
   await run(`CREATE TABLE IF NOT EXISTS memos (

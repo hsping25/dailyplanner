@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { all, run, initDb } from "./db.js";
 import { todayStr, dayWindow, eventsInWindow, shiftDate } from "./day.js";
 import { sendTelegram, keyboard } from "./telegram.js";
-import { streak } from "./review.js";
+import { streak } from "./attend.js";
 
 // 오래 밀린 할 일은 며칠 지나야 "아직 할 거야?" 하고 한 번 물어보는지
 const STALE_DAYS = 3;
@@ -53,7 +53,7 @@ export async function composeBriefing(user) {
   else if (todayTasks.length + overdue.length >= 2) lines.push("⭐ 오늘 핵심 3개는 아직 안 골랐어요. 앱에서 별을 눌러 정해 보세요.");
 
   const st = await streak(user);
-  if (st >= 2) lines.push(`🔥 ${st}일 연속 (닫고 절반 이상 해낸 날)`);
+  if (st >= 2) lines.push(`🔥 ${st}일 연속 출석`);
 
   return lines.join("\n");
 }

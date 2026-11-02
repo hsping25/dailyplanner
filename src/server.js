@@ -4,7 +4,8 @@ import { fileURLToPath } from "node:url";
 import { get, all, run, insert, initDb } from "./db.js";
 import { parseText } from "./parse.js";
 import { todayStr, shiftDate, weekStart, nowStamp, dayWindow, eventsInWindow, loadEvents, expand } from "./day.js";
-import { dayScore, closeDay, dayLog, scoresBetween, streak } from "./review.js";
+import { dayScore, closeDay, dayLog, scoresBetween } from "./review.js";
+import { streak, attendStatus, startSession, finishSession, cancelSession, AttendError } from "./attend.js";
 import { startNotifier } from "./notify.js";
 import { startSchedules } from "./schedule.js";
 import { getBotUsername } from "./telegram.js";
@@ -49,7 +50,7 @@ app.get("/api/day", ah(async (req, res) => {
   // 순차로 await하면 날짜를 넘길 때마다 그만큼 기다리게 된다.
   const loaded = await loadEvents(user);
   const byDay = expandWeek(loaded, monday);
-  const [tasks, week, scores, log, st, goals, aiWeekPending] = await Promise.all([
+  const [tasks, week, scores, log, attend, goals, aiWeekPending] = await Promise.all([
     // 버린 것(archived)은 안 보인다. 핵심(star_date)은 마감이 없어도 그날 목록에 올라온다.
     all(`SELECT * FROM tasks WHERE "user" = ? AND archived = 0
            AND (done = 0 OR due = ? OR star_date = ?)
@@ -58,7 +59,7 @@ app.get("/api/day", ah(async (req, res) => {
     weekFor(monday, sunday, user, byDay),
     scoresBetween(user, monday, sunday, loaded, byDay),
     dayLog(user, date),
-    streak(user),
+    attendStatus(user),
     all('SELECT * FROM goals WHERE "user" = ? AND week = ? ORDER BY id', [user, monday]),
     weekReportPending(user, shiftDate(weekStart(todayStr()), -7)),
   ]);
@@ -66,7 +67,7 @@ app.get("/api/day", ah(async (req, res) => {
   res.json({
     date,
     events: byDay.get(date) ?? expand(loaded, start, end),
-    tasks, week, scores, log, streak: st, goals,
+    tasks, week, scores, log, streak: attend.streak, attend, goals,
     aiWeekPending,   // 지난주 AI 리포트를 아직 안 받았으면 ✨에 점
   });
 }));
@@ -117,6 +118,26 @@ app.get("/api/scores", ah(async (req, res) => {
   const from = req.query.from || weekStart(to);
   const [scores, st] = await Promise.all([scoresBetween(user, from, to), streak(user)]);
   res.json({ scores, streak: st });
+}));
+
+// ── 공부 세션 → 출석 → 연속 기록 (src/attend.js) ──
+// 규칙 위반(10분 전 완료, 중복 시작 등)은 400으로 돌려 화면에 그대로 보여 준다.
+const attendRoute = fn => ah(async (req, res) => {
+  try { await fn(req, res); }
+  catch (e) { if (e instanceof AttendError) res.status(400).json({ error: e.message }); else throw e; }
+});
+app.get("/api/attend", ah(async (req, res) => res.json(await attendStatus(userOf(req)))));
+app.post("/api/attend/start", attendRoute(async (req, res) => {
+  await startSession(userOf(req));
+  res.json(await attendStatus(userOf(req)));
+}));
+app.post("/api/attend/:id/finish", attendRoute(async (req, res) => {
+  const r = await finishSession(userOf(req), Number(req.params.id), req.body?.note);
+  res.json({ ...(await attendStatus(userOf(req))), recovered: r.recovered });
+}));
+app.post("/api/attend/:id/cancel", attendRoute(async (req, res) => {
+  await cancelSession(userOf(req), Number(req.params.id));
+  res.json(await attendStatus(userOf(req)));
 }));
 
 // ── 주간 목표 (한 주 최대 3개) ──
