@@ -24,10 +24,10 @@
     --warn: #dc2626;         /* 지난 할 일 */
     --line: #eceef1;
     --card: #f6f7f9;
-    /* 정원 탭 전용(식물 그림에만). 3색 원칙의 유일한 예외 — 다른 화면엔 쓰지 않는다. */
-    --leaf: #3f9e4d;
-    --soil: #7a5236;
-    --pot: #c8734a;
+    /* 정원 탭 전용(배경 하늘·언덕). 3색 원칙의 유일한 예외 — 다른 화면엔 쓰지 않는다. 라이트=낮, 다크=밤 */
+    --gd-sky1: #9fd6ff; --gd-sky2: #eaf7ff;
+    --gd-hill1: #7cc96a; --gd-hill2: #b4e39a; --gd-grass: #4f9a3d;
+    --gd-sun-op: 1; --gd-moon-op: 0; --gd-cloud-op: .95;
   }
   :root[data-theme="dark"] {
     --bg: #101216;
@@ -38,9 +38,9 @@
     --warn: #f87171;
     --line: #23262c;
     --card: #191c21;
-    --leaf: #5cbf6a;
-    --soil: #5e3f2a;
-    --pot: #b0623d;
+    --gd-sky1: #0e1838; --gd-sky2: #2b3d6e;
+    --gd-hill1: #24563a; --gd-hill2: #1b3f30; --gd-grass: #3f7a46;
+    --gd-sun-op: 0; --gd-moon-op: 1; --gd-cloud-op: .12;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme]) {
@@ -52,9 +52,9 @@
       --warn: #f87171;
       --line: #23262c;
       --card: #191c21;
-      --leaf: #5cbf6a;
-      --soil: #5e3f2a;
-      --pot: #b0623d;
+      --gd-sky1: #0e1838; --gd-sky2: #2b3d6e;
+      --gd-hill1: #24563a; --gd-hill2: #1b3f30; --gd-grass: #3f7a46;
+      --gd-sun-op: 0; --gd-moon-op: 1; --gd-cloud-op: .12;
     }
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -1197,7 +1197,7 @@
   #tm-pause { background: var(--card); color: var(--ink); }
   #tm-stop { background: var(--card); color: var(--warn); }
 
-  /* ── 정원 뷰 ── 받은 물로 식물 키우기. 식물 그림에만 --leaf/--soil/--pot과 꽃잎 색을 쓴다. */
+  /* ── 정원 뷰 ── 받은 물로 식물 키우기. 3색 원칙의 예외라 색을 자유롭게 쓴다(.gd-* 와 --gd-* 안에서만). */
   #view-garden { display: none; }
   .subtop .switch button { padding: 8px 10px; }   /* 탭 다섯 개가 좁은 폰에 들어가게 */
   .dayscore .water { font-size: 14px; font-weight: 700; color: var(--accent); flex-shrink: 0; font-variant-numeric: tabular-nums; }
@@ -1215,43 +1215,155 @@
     15%, 70% { opacity: 1; transform: translate(-50%, 0); }
     100% { opacity: 0; transform: translate(-50%, -16px); }
   }
-  .gd-water { font-size: 17px; font-weight: 800; color: var(--accent); font-variant-numeric: tabular-nums; }
-  .gd-card { background: var(--card); border-radius: 16px; padding: 16px; text-align: center; }
-  .gd-stage { position: relative; display: flex; justify-content: center; }
-  .gd-stage svg { width: 200px; height: auto; }
+  .gd-water {
+    font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums;
+    color: #0369a1; background: #e0f2fe;
+    padding: 6px 12px; border-radius: 99px;
+  }
+  .gd-card {
+    border-radius: 20px; overflow: hidden;
+    background: var(--card);
+    box-shadow: 0 6px 20px rgba(15, 40, 80, 0.10);
+  }
+  .gd-stage { position: relative; overflow: hidden; }
+  .gd-scene { display: block; width: 100%; height: auto; }
+  /* 살랑살랑 — 시든 식물은 흔들리지 않는다 */
+  .gd-sway { transform-box: fill-box; transform-origin: 50% 100%; animation: gd-sway 4.5s ease-in-out infinite; }
+  @keyframes gd-sway { 0%, 100% { transform: rotate(-1.6deg); } 50% { transform: rotate(1.6deg); } }
+  .gd-cloud { animation: gd-cloud 28s ease-in-out infinite alternate; }
+  @keyframes gd-cloud { from { transform: translateX(-12px); } to { transform: translateX(18px); } }
+  .gd-star { animation: gd-twinkle 2.4s ease-in-out infinite; }
+  @keyframes gd-twinkle { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+  /* 물뿌리개 + 물방울 */
+  .gd-can {
+    position: absolute; left: 50%; top: 6%; width: 32%;
+    transform-origin: 60% 65%;
+    pointer-events: none;
+    animation: gd-can 1.5s ease-in-out forwards;
+  }
+  .gd-can svg { display: block; width: 100%; height: auto; }
+  @keyframes gd-can {
+    0% { opacity: 0; transform: translate(24px, -14px) rotate(0); }
+    18% { opacity: 1; transform: translate(0, 0) rotate(0); }
+    32%, 76% { opacity: 1; transform: translate(0, 0) rotate(-34deg); }
+    100% { opacity: 0; transform: translate(24px, -14px) rotate(0); }
+  }
   .gd-drop {
-    position: absolute; left: 50%; top: 0;
-    font-size: 22px; pointer-events: none;
-    animation: gd-drop 0.7s ease-in forwards;
+    position: absolute; top: 34%;
+    width: 6px; height: 9px;
+    border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+    background: linear-gradient(#bae6fd, #0ea5e9);
+    pointer-events: none;
+    animation: gd-fall 0.6s ease-in forwards;
   }
-  @keyframes gd-drop {
-    0% { opacity: 0; transform: translate(-50%, 0); }
-    20% { opacity: 1; }
-    100% { opacity: 0; transform: translate(-50%, 110px); }
+  @keyframes gd-fall {
+    0% { top: 34%; opacity: 0; }
+    15% { opacity: 1; }
+    100% { top: 72%; opacity: 0.2; }
   }
-  .gd-name { font-size: 19px; font-weight: 800; margin-top: 8px; }
-  .gd-prog { height: 8px; background: var(--line); border-radius: 99px; overflow: hidden; margin: 10px 0; }
-  .gd-prog i { display: block; height: 100%; background: var(--accent); }
-  .gd-msg { font-size: 15px; color: var(--ink-dim); min-height: 1.4em; }
-  .gd-msg.warn { color: var(--warn); font-weight: 700; }
-  .gd-btns { display: flex; gap: 8px; margin-top: 14px; }
+  /* 단계가 오르면 꽃가루가 터지고 한 줄 축하 */
+  .gd-spark {
+    position: absolute; left: 50%; top: 42%;
+    width: 9px; height: 9px; border-radius: 50%;
+    pointer-events: none;
+    animation: gd-spark 1.1s ease-out forwards;
+  }
+  @keyframes gd-spark {
+    0% { transform: translate(-50%, -50%) scale(0.4); opacity: 1; }
+    100% { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1); opacity: 0; }
+  }
+  .gd-cele {
+    position: absolute; left: 50%; top: 10px;
+    transform: translateX(-50%);
+    white-space: nowrap;
+    background: rgba(255, 255, 255, 0.94); color: #1f2937;
+    font-size: 15px; font-weight: 800;
+    padding: 8px 14px; border-radius: 99px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
+    pointer-events: none;
+    animation: gd-cele 2.2s ease-out forwards;
+  }
+  @keyframes gd-cele {
+    0% { opacity: 0; transform: translate(-50%, -8px) scale(0.9); }
+    12%, 80% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+    100% { opacity: 0; transform: translate(-50%, -6px); }
+  }
+  .gd-info { padding: 14px 16px 16px; }
+  .gd-title { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .gd-title b { font-size: 21px; font-weight: 800; }
+  .gd-title em { font-style: normal; font-size: 13px; color: var(--ink-dim); flex-shrink: 0; }
+  .gd-chip {
+    display: inline-block; vertical-align: 3px; margin-left: 4px;
+    font-size: 13px; font-weight: 800;
+    color: #15803d; background: #dcfce7;
+    padding: 3px 9px; border-radius: 99px;
+  }
+  .gd-chip.warn { color: #b45309; background: #fef3c7; }
+  .gd-bar { position: relative; height: 10px; margin: 14px 4px 0; background: var(--line); border-radius: 99px; }
+  .gd-bar b {
+    position: absolute; left: 0; top: 0; bottom: 0;
+    border-radius: 99px;
+    background: linear-gradient(90deg, #7dd3fc, #34d399);
+    transition: width 0.6s ease;
+  }
+  .gd-bar i {
+    position: absolute; top: 50%; width: 14px; height: 14px;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    background: var(--card); border: 2.5px solid var(--line);
+  }
+  .gd-bar i.on { background: #34d399; border-color: #fff; box-shadow: 0 0 0 1.5px #34d399; }
+  .gd-labels { position: relative; height: 18px; margin: 6px 4px 0; font-size: 12px; color: var(--ink-dim); }
+  .gd-labels span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+  .gd-labels span:first-child { transform: none; }
+  .gd-labels span:last-child { transform: translateX(-100%); }
+  .gd-labels span.cur { color: var(--ink); font-weight: 800; }
+  .gd-msg { font-size: 15px; color: var(--ink-dim); margin-top: 10px; min-height: 1.4em; text-align: center; }
+  .gd-msg.warn { color: #d97706; font-weight: 700; }
+  .gd-msg.good { color: #059669; font-weight: 700; }
+  .gd-btns { display: flex; gap: 8px; margin-top: 12px; }
   .gd-btns button {
-    flex: 1; border: none; border-radius: 12px;
-    background: var(--accent); color: #fff;
-    font-family: inherit; font-size: 16px; font-weight: 700;
-    padding: 13px 8px; cursor: pointer;
+    flex: 1; border: none; border-radius: 14px;
+    background: linear-gradient(180deg, #38bdf8, #0284c7); color: #fff;
+    font-family: inherit; font-size: 16px; font-weight: 800;
+    padding: 14px 8px; cursor: pointer;
+    box-shadow: 0 3px 0 #0369a1;
   }
-  .gd-btns button.sub { background: var(--bg); color: var(--ink); border: 1.5px solid var(--line); }
-  .gd-btns button:disabled { opacity: 0.4; cursor: default; }
-  .gd-hint { font-size: 13px; color: var(--ink-dim); margin-top: 10px; line-height: 1.5; }
-  .gd-house { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; }
-  .gd-house .pl { background: var(--card); border-radius: 12px; padding: 8px 4px; text-align: center; font-size: 13px; }
-  .gd-house .pl svg { width: 64px; height: auto; display: block; margin: 0 auto 4px; }
-  .gd-house .pl em { display: block; font-style: normal; color: var(--ink-dim); font-size: 12px; }
-  .gd-log { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 15px; }
-  .gd-log span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .gd-log b { color: var(--accent); flex-shrink: 0; }
+  .gd-btns button:active { transform: translateY(2px); box-shadow: 0 1px 0 #0369a1; }
+  .gd-btns button.sub { background: var(--bg); color: var(--ink); border: 1.5px solid var(--line); box-shadow: none; }
+  .gd-btns button.bloom { background: linear-gradient(180deg, #f472b6, #db2777); box-shadow: 0 3px 0 #9d174d; }
+  .gd-btns button:disabled { opacity: 0.4; cursor: default; transform: none; }
+  .gd-rules { display: flex; gap: 6px; margin-top: 12px; flex-wrap: wrap; }
+  .gd-rules span {
+    flex: 1; text-align: center; white-space: nowrap;
+    font-size: 13px; font-weight: 700;
+    background: var(--card); border-radius: 10px; padding: 8px 4px;
+  }
+  .gd-rules b { color: #0284c7; }
+  .gd-hint { font-size: 13px; color: var(--ink-dim); margin-top: 8px; line-height: 1.5; }
+  .gd-house { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; }
+  .gd-house .pl {
+    border-radius: 14px; padding: 8px 4px 10px; text-align: center;
+    font-size: 14px; font-weight: 800;
+    background: color-mix(in srgb, var(--tint) 24%, var(--card));
+  }
+  .gd-house .pl svg { width: 70px; height: auto; display: block; margin: 0 auto 2px; }
+  .gd-house .pl em { display: block; font-style: normal; font-weight: 600; color: var(--ink-dim); font-size: 12px; }
+  .gd-house .gd-empty { grid-column: 1 / -1; border: 1.5px dashed var(--line); border-radius: 14px; text-align: center; padding: 18px 8px; }
+  .gd-log { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 15px; }
+  .gd-log i {
+    font-style: normal; flex-shrink: 0;
+    width: 30px; height: 30px; border-radius: 50%;
+    display: grid; place-items: center; font-size: 15px;
+    background: #e0f2fe;
+  }
+  .gd-log span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .gd-log span em { font-style: normal; font-size: 12px; color: var(--ink-dim); margin-left: 6px; }
+  .gd-log b { color: #0284c7; flex-shrink: 0; }
   .gd-empty { font-size: 14px; color: var(--ink-dim); padding: 8px 0; }
+  @media (prefers-reduced-motion: reduce) {
+    .gd-sway, .gd-cloud, .gd-star { animation: none; }
+  }
 
   /* ── 가로 모드: 폭을 넓게 쓰고 하단 입력바 여백 줄임 ── */
   @media (orientation: landscape) {
@@ -1423,21 +1535,60 @@
     </div>
     <div class="gd-card">
       <div class="gd-stage" id="gd-stage"></div>
-      <div class="gd-name" id="gd-name"></div>
-      <div class="gd-prog"><i id="gd-prog"></i></div>
-      <div class="gd-msg" id="gd-msg"></div>
-      <div class="gd-btns" id="gd-btns"></div>
+      <div class="gd-info">
+        <div class="gd-title" id="gd-title"></div>
+        <div id="gd-track"></div>
+        <div class="gd-msg" id="gd-msg"></div>
+        <div class="gd-btns" id="gd-btns"></div>
+      </div>
     </div>
-    <p class="gd-hint">할 일 완료 💧1 · 핵심(★) 💧2 · 일정 완료 💧1<br>사흘 넘게 물을 안 주면 시들어요. 시든 식물은 물로 먼저 살려야 다시 자라요.</p>
+    <div class="gd-rules">
+      <span>✓ 할 일 <b>💧1</b></span>
+      <span>★ 핵심 <b>💧2</b></span>
+      <span>📅 일정 <b>💧1</b></span>
+    </div>
+    <p class="gd-hint">사흘 넘게 물을 안 주면 시들어요. 시든 식물은 물로 먼저 살려야 다시 자라요.</p>
   </section>
   <section>
-    <h2>온실</h2>
+    <div class="memo-head">
+      <h2>온실</h2>
+      <span class="week-hint" id="gd-count"></span>
+    </div>
     <div class="gd-house" id="gd-house"></div>
   </section>
   <section>
     <h2>최근 받은 물</h2>
     <div id="gd-recent"></div>
   </section>
+  <!-- 정원 그림이 함께 쓰는 그라디언트(꽃잎 색은 스크립트가 종류별로 덧붙인다) -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs id="gd-defs">
+      <linearGradient id="gd-sky" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" style="stop-color:var(--gd-sky1)"/><stop offset="1" style="stop-color:var(--gd-sky2)"/>
+      </linearGradient>
+      <linearGradient id="gd-leaf" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#8ee06a"/><stop offset="1" stop-color="#2f8f46"/>
+      </linearGradient>
+      <linearGradient id="gd-leaf-dry" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#d9c56b"/><stop offset="1" stop-color="#8a7a3a"/>
+      </linearGradient>
+      <linearGradient id="gd-pot" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="#a94f2c"/><stop offset=".42" stop-color="#e48d5e"/><stop offset="1" stop-color="#9c4627"/>
+      </linearGradient>
+      <linearGradient id="gd-rim" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#f0a476"/><stop offset="1" stop-color="#c0643b"/>
+      </linearGradient>
+      <radialGradient id="gd-soil" cx=".5" cy=".35" r=".65">
+        <stop offset="0" stop-color="#6e4930"/><stop offset="1" stop-color="#3a2315"/>
+      </radialGradient>
+      <radialGradient id="gd-seed" cx=".35" cy=".3" r=".8">
+        <stop offset="0" stop-color="#f0d29c"/><stop offset="1" stop-color="#a0723f"/>
+      </radialGradient>
+      <mask id="gd-moon-mask">
+        <rect width="240" height="210" fill="#fff"/><circle cx="205" cy="33" r="11" fill="#000"/>
+      </mask>
+    </defs>
+  </svg>
 </div>
 
 <div class="draw-modal" id="draw-modal" hidden>
@@ -2173,78 +2324,187 @@ function gotWater(delta) {
   setTimeout(() => el.remove(), 1400);
 }
 
-// ── 정원 ── 규칙은 src/garden.js. 그림은 종류(꽃잎 색·개수) × 단계(0 씨앗~4 꽃) × 시듦(0~2)으로 그린다.
+// ── 정원 ── 규칙은 src/garden.js. 그림은 종류 × 단계(0 씨앗~4 꽃) × 시듦(0~2)으로 그린다.
+// 정원은 3색 원칙의 예외라 색을 자유롭게 쓴다 — 단 이 절과 .gd-* CSS 안에서만.
+// type: ray(꽃잎이 둥글게 펼쳐짐) | tulip(컵 모양) | spike(이삭처럼 줄줄이). base→tip = 꽃잎 안쪽→끝 그라디언트.
 const KIND_LOOK = {
-  "데이지":   { petal: "#ffffff", edge: "#cfcfcf", center: "#f2c230", n: 12, len: 12, wid: 4 },
-  "해바라기": { petal: "#f6bd16", edge: "#d99a00", center: "#6b4220", n: 16, len: 13, wid: 4.5 },
-  "코스모스": { petal: "#ec6fa6", edge: "#c94d86", center: "#f2c230", n: 8, len: 13, wid: 6 },
-  "도라지":   { petal: "#8b6fd6", edge: "#6c50b8", center: "#f4efff", n: 5, len: 12, wid: 8 },
-  "동백":     { petal: "#e0464b", edge: "#b8343a", center: "#f6d24a", n: 6, len: 11, wid: 8.5 },
+  "데이지":   { type: "ray", n: 14, len: 21, wid: 6, base: "#e9e4f7", tip: "#ffffff", edge: "#cfc8e4", c1: "#ffe27a", c2: "#f0a81c", tint: "#a5b4fc" },
+  "해바라기": { type: "ray", n: 16, len: 20, wid: 8, layers: 2, base: "#f59e0b", tip: "#fde047", edge: "#d97706", c1: "#8b5a2b", c2: "#3f2510", seeds: true, tint: "#fcd34d" },
+  "코스모스": { type: "ray", n: 8, len: 21, wid: 13, base: "#db2777", tip: "#fbcfe8", edge: "#be185d", c1: "#fde68a", c2: "#f59e0b", tint: "#f9a8d4" },
+  "도라지":   { type: "ray", n: 5, len: 21, wid: 16, pointy: true, base: "#6d28d9", tip: "#c4b5fd", edge: "#5b21b6", c1: "#ffffff", c2: "#ddd6fe", tint: "#c4b5fd" },
+  "동백":     { type: "ray", n: 7, len: 17, wid: 16, layers: 2, base: "#b91c1c", tip: "#fb7185", edge: "#991b1b", c1: "#fef08a", c2: "#eab308", stamens: true, tint: "#fca5a5" },
+  "튤립":     { type: "tulip", base: "#e11d48", tip: "#fda4af", edge: "#9f1239", tint: "#fda4af" },
+  "라벤더":   { type: "spike", base: "#6d28d9", tip: "#c4b5fd", edge: "#5b21b6", tint: "#ddd6fe" },
 };
-function plantSvg(kind, stage, wilt = 0) {
-  const k = KIND_LOOK[kind] ?? KIND_LOOK["데이지"];
-  const bx = 60, by = 119;
-  const h = [0, 24, 52, 74, 82][stage];
-  const bend = [0, 14, 28][wilt];               // 시들면 줄기가 옆으로 휘고 끝이 처진다
-  const cx = bx, cy = by - h * 0.6;
-  const tx = bx + bend, ty = by - h + bend * 0.5;
-  const at = t => [(1 - t) ** 2 * bx + 2 * (1 - t) * t * cx + t * t * tx,
-                   (1 - t) ** 2 * by + 2 * (1 - t) * t * cy + t * t * ty];
-  const leaf = ([x, y], side, s) => `<ellipse cx="${x + side * s}" cy="${y}" rx="${s}" ry="${s * 0.42}"
-    transform="rotate(${side * (-30 + wilt * 35)} ${x} ${y})" fill="var(--leaf)"/>`;
-  let g = "";
-  if (stage === 0) {
-    g = `<ellipse cx="${bx}" cy="${by - 2}" rx="6" ry="4" fill="#c9a46a" stroke="var(--soil)" stroke-width="1"/>`;
-  } else {
-    g += `<path d="M${bx},${by} Q${cx},${cy} ${tx},${ty}" fill="none" stroke="var(--leaf)"
-      stroke-width="${stage >= 2 ? 4 : 3}" stroke-linecap="round"/>`;
-    if (stage === 1) g += leaf(at(1), -1, 8) + leaf(at(1), 1, 8);
-    else for (const [t, s] of [[0.35, 12], [0.65, 10]]) g += leaf(at(t), -1, s) + leaf(at(t), 1, s);
-    const tilt = wilt * 28;
-    if (stage === 3) {
-      g += `<g transform="rotate(${tilt} ${tx} ${ty})">
-        <ellipse cx="${tx}" cy="${ty - 10}" rx="7.5" ry="12" fill="${k.petal}" stroke="${k.edge}" stroke-width="1"/>
-        ${leaf([tx, ty], -1, 5)}${leaf([tx, ty], 1, 5)}</g>`;
-    } else if (stage === 4) {
-      const L = k.len * 1.7, W = k.wid * 1.7;   // 꽃송이가 줄기에 비해 작아 보이지 않게
-      let petals = "";
-      for (let i = 0; i < k.n; i++) {
-        petals += `<ellipse cx="${tx}" cy="${ty - L * 0.6}" rx="${W / 2}" ry="${L / 2}"
-          transform="rotate(${(i * 360) / k.n} ${tx} ${ty})" fill="${k.petal}" stroke="${k.edge}" stroke-width="0.8"/>`;
-      }
-      g += `<g transform="rotate(${tilt} ${tx} ${ty})">${petals}
-        <circle cx="${tx}" cy="${ty}" r="${L * 0.45}" fill="${k.center}"/></g>`;
-    }
-  }
-  const filter = ["none", "saturate(.5)", "saturate(.25) sepia(.4)"][wilt];
-  return `<svg viewBox="0 0 120 160" aria-hidden="true">
-    <path d="M32,122 L88,122 L82,156 L38,156 Z" fill="var(--pot)"/>
-    <rect x="27" y="113" width="66" height="10" rx="3" fill="var(--pot)"/>
-    <rect x="27" y="113" width="66" height="10" rx="3" fill="#000" opacity=".12"/>
-    <ellipse cx="${bx}" cy="${by - 1}" rx="30" ry="3.5" fill="var(--soil)"/>
-    <g style="filter:${filter}">${g}</g>
-  </svg>`;
+const KIND_IDX = Object.fromEntries(Object.keys(KIND_LOOK).map((k, i) => [k, i]));
+const STAGE_MSG = ["", "🌱 싹이 텄어요!", "🌿 줄기가 쑥 자랐어요!", "🌷 꽃봉오리가 맺혔어요!", "🌸 꽃이 활짝 피었어요!"];
+
+// 꽃잎·꽃술 그라디언트는 종류마다 한 번만 정의해 두고 url(#…)로 함께 쓴다(온실의 작은 그림들도)
+document.getElementById("gd-defs").insertAdjacentHTML("beforeend", Object.values(KIND_LOOK).map((k, i) => `
+  <linearGradient id="gp-${i}" x1="0" y1="1" x2="0" y2="0">
+    <stop offset="0" stop-color="${k.base}"/><stop offset="1" stop-color="${k.tip}"/></linearGradient>
+  <radialGradient id="gc-${i}" cx=".4" cy=".35" r=".7">
+    <stop offset="0" stop-color="${k.c1 ?? k.tip}"/><stop offset="1" stop-color="${k.c2 ?? k.base}"/></radialGradient>`).join(""));
+
+// 원점에서 위로 뻗는 꽃잎 하나 (길이 L, 폭 W)
+const petalD = (L, W, pointy) => pointy
+  ? `M0,0 C${W * .6},${-L * .3} ${W * .3},${-L * .8} 0,${-L} C${-W * .3},${-L * .8} ${-W * .6},${-L * .3} 0,0Z`
+  : `M0,0 C${W * .62},${-L * .15} ${W * .55},${-L * .95} 0,${-L} C${-W * .55},${-L * .95} ${-W * .62},${-L * .15} 0,0Z`;
+
+// 잎 하나. side = -1 왼쪽 / 1 오른쪽. 시들면 아래로 처지고 누렇게.
+function leafG(x, y, side, s, wilt = 0) {
+  const d = `M0,0 C${s * .3},${-s * .45} ${s * .75},${-s * .4} ${s},0 C${s * .75},${s * .3} ${s * .3},${s * .34} 0,0Z`;
+  return `<g transform="translate(${x.toFixed(1)} ${y.toFixed(1)}) scale(${side} 1) rotate(${-28 + wilt * 38})">
+    <path d="${d}" fill="url(#${wilt ? "gd-leaf-dry" : "gd-leaf"})"/>
+    <path d="M1,0 Q${s * .5},${-s * .05} ${s * .88},0" fill="none" stroke="#fff" stroke-opacity=".4" stroke-width=".8"/></g>`;
 }
 
+// 이삭 모양(라벤더). 위에서부터 그려 아래 꽃이 앞에 오게.
+function spikeG(k, i, count, bud) {
+  let g = "";
+  for (let j = count - 1; j >= 0; j--) {
+    const f = j / count, x = (j % 2 ? 2.6 : -2.6) * (1 - f * .4), s = 1 - f * .45;
+    g += `<ellipse cx="${x.toFixed(1)}" cy="${(-j * 3.4).toFixed(1)}" rx="${(2.9 * s).toFixed(1)}" ry="${(3.7 * s).toFixed(1)}"
+      fill="${bud ? "#b9a6e0" : `url(#gp-${i})`}" stroke="${bud ? "#7e9f62" : k.edge}" stroke-width=".5"/>`;
+  }
+  return g;
+}
+
+// 줄기 끝에 달리는 것 — 3단계 봉오리, 4단계 꽃. (0,0) = 줄기 끝.
+function headG(k, i, stage) {
+  if (k.type === "spike") return spikeG(k, i, stage === 3 ? 6 : 11, stage === 3);
+  if (stage === 3) {
+    return `<path d="${petalD(20, 14, true)}" fill="url(#gp-${i})" stroke="${k.edge}" stroke-width=".6"/>
+      ${leafG(0, 0, -1, 7)}${leafG(0, 0, 1, 7)}`;
+  }
+  if (k.type === "tulip") return `
+    <path d="M-10,-2 C-13,-14 -8,-25 0,-27 C8,-25 13,-14 10,-2 C6,3 -6,3 -10,-2Z" fill="url(#gp-${i})" stroke="${k.edge}" stroke-width=".7"/>
+    <path d="M-10,-2 C-12,-15 -6,-22 -1,-25 C-3,-15 -2,-6 3,1 C-2,2 -7,1 -10,-2Z" fill="${k.edge}" opacity=".35"/>
+    <path d="M10,-2 C12,-15 6,-22 1,-25 C3,-15 2,-6 -3,1 C2,2 7,1 10,-2Z" fill="${k.tip}" opacity=".5"/>`;
+  const step = 360 / k.n;
+  let g = "";
+  if (k.layers === 2) for (let j = 0; j < k.n; j++)   // 뒷줄 꽃잎: 반 칸 비켜서 짙은 색으로
+    g += `<path d="${petalD(k.len * .92, k.wid, k.pointy)}" fill="${k.base}" transform="rotate(${j * step + step / 2})"/>`;
+  for (let j = 0; j < k.n; j++)
+    g += `<path d="${petalD(k.len, k.wid, k.pointy)}" fill="url(#gp-${i})" stroke="${k.edge}" stroke-width=".6" transform="rotate(${j * step})"/>`;
+  const r = k.len * (k.seeds ? .5 : .32);
+  g += `<circle r="${r}" fill="url(#gc-${i})"/>`;
+  if (k.seeds) for (let j = 0; j < 34; j++) {   // 해바라기 씨 — 해바라기 배열(137.5°)로
+    const a = j * 2.4, d = Math.sqrt(j / 34) * r * .85;
+    g += `<circle cx="${(Math.cos(a) * d).toFixed(1)}" cy="${(Math.sin(a) * d).toFixed(1)}" r=".8" fill="#2a1508" opacity=".55"/>`;
+  }
+  if (k.stamens) for (let j = 0; j < 12; j++) {  // 동백 꽃술
+    const a = j * Math.PI / 6;
+    g += `<circle cx="${(Math.cos(a) * r * 1.1).toFixed(1)}" cy="${(Math.sin(a) * r * 1.1).toFixed(1)}" r="1.3" fill="#fde047" stroke="#ca8a04" stroke-width=".4"/>`;
+  }
+  return g;
+}
+
+// 화분 위의 식물 (좌표계 120×160, 흙 표면 y≈114). growth는 씨앗 단계에서 싹 끝을 살짝 보여 줄 때만.
+function plantG(kind, stage, wilt = 0, growth = 0) {
+  const k = KIND_LOOK[kind] ?? KIND_LOOK["데이지"], i = KIND_IDX[kind] ?? 0;
+  const bx = 60, by = 116;
+  if (stage === 0) return `
+    <ellipse cx="${bx}" cy="${by - 1}" rx="13" ry="4" fill="#4a2f1d"/>
+    <ellipse cx="${bx}" cy="${by - 3}" rx="6.5" ry="4.5" fill="url(#gd-seed)" transform="rotate(-15 ${bx} ${by - 3})"/>
+    <path d="M${bx - 3},${by - 5} q2,-1.5 4,-1" stroke="#fff" stroke-opacity=".6" fill="none" stroke-width=".8"/>
+    ${growth >= 1 ? `<path d="M${bx + 1},${by - 7} q1,-5 4,-6" stroke="#5fb94a" stroke-width="2" fill="none" stroke-linecap="round"/>` : ""}`;
+  const h = [0, 24, 52, 74, 82][stage];
+  const bend = [0, 14, 28][wilt];              // 시들면 줄기가 옆으로 휘고 끝이 처진다
+  const cx = bx, cy = by - h * .6;
+  const tx = bx + bend, ty = by - h + bend * .5;
+  const at = t => [(1 - t) ** 2 * bx + 2 * (1 - t) * t * cx + t * t * tx,
+                   (1 - t) ** 2 * by + 2 * (1 - t) * t * cy + t * t * ty];
+  const d = `M${bx},${by} Q${cx},${cy} ${tx},${ty}`;
+  let g = `<path d="${d}" fill="none" stroke="${["#3f8f3a", "#7a8f3a", "#8a7440"][wilt]}" stroke-width="${stage >= 2 ? 4 : 3}" stroke-linecap="round"/>
+    <path d="${d}" fill="none" stroke="#b5f09a" stroke-opacity=".45" stroke-width="1" transform="translate(-1 0)"/>`;
+  const leaves = stage === 1 ? [[1, 12]] : stage === 2 ? [[.3, 17], [.6, 14], [.9, 10]] : [[.25, 17], [.5, 14], [.72, 11]];
+  for (const [t, s] of leaves) { const [x, y] = at(t); g += leafG(x, y, -1, s, wilt) + leafG(x, y, 1, s, wilt); }
+  if (stage >= 3) {
+    const fade = wilt ? ` style="filter:saturate(${wilt === 2 ? .35 : .6})"` : "";
+    g += `<g transform="translate(${tx} ${ty}) rotate(${wilt * 28})"${fade}>${headG(k, i, stage)}</g>`;
+  }
+  return g;
+}
+
+const POT = `
+  <path d="M30,122 L90,122 L83,156 Q82,159 79,159 L41,159 Q38,159 37,156Z" fill="url(#gd-pot)"/>
+  <path d="M41,128 L44,154" stroke="#fff" stroke-opacity=".22" stroke-width="3" stroke-linecap="round"/>
+  <rect x="26" y="111" width="68" height="13" rx="4" fill="url(#gd-rim)"/>
+  <rect x="31" y="124" width="58" height="2.5" fill="#000" opacity=".14"/>
+  <ellipse cx="60" cy="114" rx="30" ry="4.6" fill="url(#gd-soil)"/>
+  <circle cx="48" cy="114.5" r="1" fill="#8a6446"/><circle cx="71" cy="113.5" r="1.2" fill="#8a6446"/>
+  <circle cx="64" cy="115.6" r=".8" fill="#9b7556"/>`;
+// 온실 카드용 작은 그림 (하늘 없이 화분만)
+const plantSvg = (kind, stage, wilt = 0) =>
+  `<svg viewBox="0 0 120 160" aria-hidden="true">${POT}${plantG(kind, stage, wilt)}</svg>`;
+
+// 큰 그림: 하늘(라이트=낮, 다크=밤) + 언덕 + 화분. 해/달/구름은 테마 토큰의 불투명도로 켜고 끈다.
+const STARS = [[18, 20, 1], [58, 12, .8], [108, 26, 1.1], [150, 10, .7], [88, 52, .8], [28, 62, .7], [230, 74, .9], [170, 56, .7], [134, 70, .6]];
+const cloud = (x, y, s) => `<g fill="#fff" transform="translate(${x} ${y}) scale(${s})">
+  <ellipse cx="0" cy="6" rx="22" ry="8"/><ellipse cx="9" cy="-1" rx="13" ry="10"/><ellipse cx="-8" cy="1" rx="9" ry="7"/></g>`;
+const tuft = (x, y) => `<path d="M${x},${y} q-1,-5 -4,-7 M${x},${y} q0,-6 1,-10 M${x},${y} q1,-4 5,-6"
+  stroke="var(--gd-grass)" stroke-width="1.6" fill="none" stroke-linecap="round"/>`;
+const wildflower = (x, y, c) => `<g transform="translate(${x} ${y})"><path d="M0,0 v6" stroke="var(--gd-grass)" stroke-width="1"/>
+  ${[0, 72, 144, 216, 288].map(a => `<circle r="1.7" cx="${(Math.cos(a * Math.PI / 180) * 2).toFixed(1)}" cy="${(Math.sin(a * Math.PI / 180) * 2).toFixed(1)}" fill="${c}"/>`).join("")}
+  <circle r="1.1" fill="#fde047"/></g>`;
+function sceneSvg(p) {
+  return `<svg viewBox="0 0 240 210" class="gd-scene" aria-hidden="true">
+    <rect width="240" height="210" fill="url(#gd-sky)"/>
+    <g style="opacity:var(--gd-sun-op)">
+      <circle cx="198" cy="38" r="27" fill="#fde68a" opacity=".35"/><circle cx="198" cy="38" r="15" fill="#fcd34d"/></g>
+    <g style="opacity:var(--gd-moon-op)">
+      ${STARS.map(([x, y, r], j) => `<circle class="gd-star" style="animation-delay:${j * .37}s" cx="${x}" cy="${y}" r="${r}" fill="#fff"/>`).join("")}
+      <circle cx="198" cy="38" r="13" fill="#f8fafc" mask="url(#gd-moon-mask)"/></g>
+    <g class="gd-cloud" style="opacity:var(--gd-cloud-op)">${cloud(48, 34, 1)}${cloud(128, 22, .65)}</g>
+    <path d="M0,160 Q55,128 125,152 T240,140 V210 H0Z" fill="var(--gd-hill2)"/>
+    <path d="M0,176 Q85,150 165,172 T240,166 V210 H0Z" fill="var(--gd-hill1)"/>
+    ${tuft(18, 192)}${tuft(204, 186)}${tuft(170, 200)}${tuft(40, 204)}
+    ${wildflower(28, 180, "#f9a8d4")}${wildflower(214, 176, "#fde047")}${wildflower(186, 190, "#c4b5fd")}${wildflower(10, 198, "#fff")}
+    <ellipse cx="120" cy="203" rx="36" ry="4.5" fill="#000" opacity=".2"/>
+    <g transform="translate(51 20) scale(1.15)">${POT}<g class="${p.wilt ? "" : "gd-sway"}">${plantG(p.kind, p.stage, p.wilt, p.growth)}</g></g>
+  </svg>`;
+}
+const CAN_SVG = `<svg viewBox="0 0 100 70" aria-hidden="true">
+  <path d="M50,27 Q61,6 73,27" stroke="#0369a1" stroke-width="5" fill="none" stroke-linecap="round"/>
+  <path d="M40,50 L11,23" stroke="#0284c7" stroke-width="6" stroke-linecap="round"/>
+  <ellipse cx="9" cy="21" rx="6" ry="3.5" fill="#0369a1" transform="rotate(-42 9 21)"/>
+  <rect x="37" y="26" width="48" height="37" rx="8" fill="#38bdf8"/>
+  <rect x="42" y="31" width="6" height="26" rx="3" fill="#fff" opacity=".35"/>
+  <rect x="37" y="54" width="48" height="9" rx="4" fill="#0284c7" opacity=".5"/></svg>`;
+
 const gdStageEl = document.getElementById("gd-stage");
+let gdPlant = null;           // 직전에 그린 식물 — 단계가 오르면 축하하려고
 async function loadGarden() {
   try { renderGarden(await (await apiFetch("/api/garden")).json()); } catch {}
 }
 function renderGarden(g) {
+  const prev = gdPlant, p = g.plant;
+  gdPlant = p;
   waterN = g.water;
-  const p = g.plant;
-  document.getElementById("gd-water").textContent = `💧${g.water}`;
-  gdStageEl.innerHTML = plantSvg(p.kind, p.stage, p.wilt);
-  document.getElementById("gd-name").textContent = `${p.kind} · ${p.stageName}`;
-  document.getElementById("gd-prog").style.width = `${Math.min(100, (p.growth / g.goal) * 100)}%`;
+  document.getElementById("gd-water").textContent = `💧 ${g.water}`;
+  gdStageEl.innerHTML = sceneSvg(p);
+
+  const days = Math.round((dateObj(todayStr) - dateObj(p.started)) / 86_400_000) + 1;
+  document.getElementById("gd-title").innerHTML = `<div><b>${esc(p.kind)}</b><span class="gd-chip">${p.stageName}</span>
+    ${p.wilt ? `<span class="gd-chip warn">${p.wilt === 2 ? "많이 시듦" : "시듦"}</span>` : ""}</div>
+    <em>함께한 지 ${days}일째</em>`;
+  const pos = s => (s.at / g.goal) * 100;
+  document.getElementById("gd-track").innerHTML = `
+    <div class="gd-bar"><b style="width:${Math.min(100, (p.growth / g.goal) * 100)}%"></b>
+      ${g.stages.map(s => `<i class="${p.growth >= s.at ? "on" : ""}" style="left:${pos(s)}%"></i>`).join("")}</div>
+    <div class="gd-labels">${g.stages.map((s, j) =>
+      `<span class="${j === p.stage ? "cur" : ""}" style="left:${pos(s)}%">${s.name === "꽃봉오리" ? "봉오리" : s.name}</span>`).join("")}</div>`;
+
   const msg = document.getElementById("gd-msg");
-  msg.classList.toggle("warn", p.wilt > 0);
+  msg.className = "gd-msg" + (p.wilt ? " warn" : p.grown ? " good" : "");
   msg.textContent = p.grown ? "다 자랐어요! 온실로 옮기고 새 씨앗을 받으세요."
-    : p.wilt ? `${p.wilt === 2 ? "많이 " : ""}시들었어요 — 💧${p.need}방울이면 살아나요`
-    : `다음 단계(${g.stages[p.stage + 1].name})까지 💧${p.toNext}`;
+    : p.wilt ? `목이 말라요 — 💧${p.need}방울이면 살아나요`
+    : g.water > 0 ? `다음 단계(${g.stages[p.stage + 1].name})까지 💧${p.toNext}`
+    : `다음 단계까지 💧${p.toNext} · 할 일을 끝내면 물이 생겨요`;
   const btns = document.getElementById("gd-btns");
   if (p.grown) {
-    btns.innerHTML = `<button id="gd-harvest">🏡 온실로 옮기기</button>`;
+    btns.innerHTML = `<button id="gd-harvest" class="bloom">🏡 온실로 옮기기</button>`;
     document.getElementById("gd-harvest").onclick = harvestPlant;
   } else {
     const off = g.water <= 0 ? "disabled" : "";
@@ -2253,13 +2513,58 @@ function renderGarden(g) {
     document.getElementById("gd-one").onclick = () => waterPlant(1);
     document.getElementById("gd-all").onclick = () => waterPlant(g.water);
   }
-  const fmtMd = d => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
+
+  const md = d => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
+  document.getElementById("gd-count").textContent = g.greenhouse.length ? `${g.greenhouse.length}송이` : "";
   document.getElementById("gd-house").innerHTML = g.greenhouse.length
-    ? g.greenhouse.map(h => `<div class="pl">${plantSvg(h.kind, 4)}${esc(h.kind)}<em>${fmtMd(h.grown_at)}</em></div>`).join("")
-    : `<div class="gd-empty">다 키운 꽃이 여기 모여요.</div>`;
+    ? g.greenhouse.map(h => `<div class="pl" style="--tint:${KIND_LOOK[h.kind]?.tint ?? "#a5b4fc"}">
+        ${plantSvg(h.kind, 4)}${esc(h.kind)}<em>${md(h.grown_at)} 완성</em></div>`).join("")
+    : `<div class="gd-empty">🌼 다 키운 꽃이 여기 모여요</div>`;
   document.getElementById("gd-recent").innerHTML = g.recent.length
-    ? g.recent.map(r => `<div class="gd-log"><span>${esc(r.label ?? "")}</span><b>💧+${r.amount}</b></div>`).join("")
+    ? g.recent.map(r => `<div class="gd-log"><i>💧</i>
+        <span>${esc(r.label ?? "")}<em>${md(r.created)} ${r.created.slice(11, 16)}</em></span><b>+${r.amount}</b></div>`).join("")
     : `<div class="gd-empty">아직 받은 물이 없어요. 할 일을 끝내면 물이 생겨요.</div>`;
+
+  // 같은 식물이 한 단계 올랐거나 기운을 차렸으면 축하, 온실로 옮겨 새 식물이면 새 씨앗 인사
+  if (prev && prev.id === p.id) {
+    if (p.stage > prev.stage) celebrate(STAGE_MSG[p.stage], p.stage === 4);
+    else if (prev.wilt && !p.wilt) celebrate("💪 다시 기운을 차렸어요!");
+  } else if (prev) celebrate(`🌰 ${p.kind} 씨앗을 심었어요!`);
+}
+function celebrate(text, big = false) {
+  const k = KIND_LOOK[gdPlant.kind] ?? KIND_LOOK["데이지"];
+  const colors = [k.base, k.tip, "#fde047", "#7dd3fc", "#86efac", "#f9a8d4"];
+  for (let j = 0; j < (big ? 30 : 16); j++) {
+    const s = document.createElement("i");
+    s.className = "gd-spark";
+    const a = Math.random() * Math.PI * 2, d = 45 + Math.random() * (big ? 100 : 55);
+    s.style.cssText = `--dx:${(Math.cos(a) * d).toFixed(0)}px;--dy:${(Math.sin(a) * d - 20).toFixed(0)}px;`
+      + `background:${colors[j % colors.length]};animation-delay:${(Math.random() * .15).toFixed(2)}s`;
+    gdStageEl.appendChild(s);
+    setTimeout(() => s.remove(), 1400);
+  }
+  const b = document.createElement("div");
+  b.className = "gd-cele";
+  b.textContent = text;
+  gdStageEl.appendChild(b);
+  setTimeout(() => b.remove(), 2300);
+}
+// 물뿌리개가 기울며 물방울이 떨어진다. 다 떨어질 때까지 걸리는 시간(ms)을 돌려준다.
+function pourAnim(n) {
+  const can = document.createElement("div");
+  can.className = "gd-can";
+  can.innerHTML = CAN_SVG;
+  gdStageEl.appendChild(can);
+  const k = Math.min(n, 6);
+  for (let j = 0; j < k; j++) setTimeout(() => {
+    const d = document.createElement("i");
+    d.className = "gd-drop";
+    d.style.left = `${46 + Math.random() * 8}%`;
+    gdStageEl.appendChild(d);
+    setTimeout(() => d.remove(), 650);
+  }, 450 + j * 110);
+  setTimeout(() => can.remove(), 1550);
+  return 450 + k * 110 + 500;
 }
 async function waterPlant(n) {
   document.querySelectorAll("#gd-btns button").forEach(b => (b.disabled = true));
@@ -2268,17 +2573,7 @@ async function waterPlant(n) {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ n }),
     })).json();
-    // 물방울이 떨어진 뒤에 자란 모습으로 바꿔 그린다
-    for (let i = 0; i < Math.min(j.used, 3); i++) {
-      setTimeout(() => {
-        const d = document.createElement("div");
-        d.className = "gd-drop";
-        d.textContent = "💧";
-        gdStageEl.appendChild(d);
-        setTimeout(() => d.remove(), 750);
-      }, i * 180);
-    }
-    setTimeout(() => renderGarden(j), j.used ? 650 + Math.min(j.used, 3) * 180 : 0);
+    setTimeout(() => renderGarden(j), j.used ? pourAnim(j.used) : 0);
   } catch { loadGarden(); }
 }
 async function harvestPlant() {

@@ -16,7 +16,7 @@ export const STAGES = [
 ];
 export const GOAL = STAGES[STAGES.length - 1].at;
 // 온실에 하나씩 쌓일 때마다 다음 종류로 (클라이언트가 이름으로 모양·색을 고른다)
-export const KINDS = ["데이지", "해바라기", "코스모스", "도라지", "동백"];
+export const KINDS = ["데이지", "해바라기", "코스모스", "도라지", "동백", "튤립", "라벤더"];
 
 // 물을 안 준 날 수 → 다시 살리는 데 드는 물. 3일째부터 시들고 5일째부터 많이 시든다.
 const reviveNeed = dry => dry >= 5 ? 5 : dry >= 3 ? 2 : 0;
