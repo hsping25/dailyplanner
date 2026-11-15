@@ -11,6 +11,7 @@ import { startSchedules } from "./schedule.js";
 import { getBotUsername } from "./telegram.js";
 import { linkCode, linkStatus, unlink, startTgPoller } from "./tglink.js";
 import { dayNote, weekReport, applySuggestion, weekReportPending } from "./ai.js";
+import { earn, revoke, balance, gardenState, water, harvest } from "./garden.js";
 
 const app = express();
 app.use(express.json({ limit: "5mb" })); // 그림 메모(PNG 데이터 URL)가 기본 100kb를 넘을 수 있음
@@ -50,7 +51,7 @@ app.get("/api/day", ah(async (req, res) => {
   // 순차로 await하면 날짜를 넘길 때마다 그만큼 기다리게 된다.
   const loaded = await loadEvents(user);
   const byDay = expandWeek(loaded, monday);
-  const [tasks, week, scores, log, attend, goals, aiWeekPending] = await Promise.all([
+  const [tasks, week, scores, log, attend, goals, aiWeekPending, waterN] = await Promise.all([
     // 버린 것(archived)은 안 보인다. 핵심(star_date)은 마감이 없어도 그날 목록에 올라온다.
     all(`SELECT * FROM tasks WHERE "user" = ? AND archived = 0
            AND (done = 0 OR due = ? OR star_date = ?)
@@ -62,6 +63,7 @@ app.get("/api/day", ah(async (req, res) => {
     attendStatus(user),
     all('SELECT * FROM goals WHERE "user" = ? AND week = ? ORDER BY id', [user, monday]),
     weekReportPending(user, shiftDate(weekStart(todayStr()), -7)),
+    balance(user),
   ]);
 
   res.json({
@@ -69,6 +71,7 @@ app.get("/api/day", ah(async (req, res) => {
     events: byDay.get(date) ?? expand(loaded, start, end),
     tasks, week, scores, log, streak: attend.streak, attend, goals,
     aiWeekPending,   // 지난주 AI 리포트를 아직 안 받았으면 ✨에 점
+    water: waterN,   // 성적 바의 💧잔고
   });
 }));
 
@@ -297,15 +300,20 @@ app.delete("/api/events/:id", ah(async (req, res) => {
 app.post("/api/events/:id/done", ah(async (req, res) => {
   const { date, done } = req.body;
   if (!date) return res.status(400).json({ error: "date는 필수" });
-  const owns = await get('SELECT 1 FROM events WHERE id = ? AND "user" = ?', [req.params.id, userOf(req)]);
-  if (!owns) return res.status(404).json({ error: "없는 일정" });
-  if (done) {
-    await run(`INSERT INTO event_done (event_id, date) VALUES (?, ?)
-      ON CONFLICT (event_id, date) DO NOTHING`, [req.params.id, date]);
-  } else {
-    await run("DELETE FROM event_done WHERE event_id = ? AND date = ?", [req.params.id, date]);
-  }
-  res.json({ ok: true });
+  const user = userOf(req);
+  const ev = await get('SELECT title FROM events WHERE id = ? AND "user" = ?', [req.params.id, user]);
+  if (!ev) return res.status(404).json({ error: "없는 일정" });
+  // 완료하면 💧+1, 풀면 회수 (회차별 key라 반복 일정은 날마다 받는다)
+  const key = `ev:${req.params.id}:${date}`;
+  const [, water] = await Promise.all(done ? [
+    run(`INSERT INTO event_done (event_id, date) VALUES (?, ?)
+      ON CONFLICT (event_id, date) DO NOTHING`, [req.params.id, date]),
+    earn(user, key, 1, ev.title),
+  ] : [
+    run("DELETE FROM event_done WHERE event_id = ? AND date = ?", [req.params.id, date]),
+    revoke(user, key),
+  ]);
+  res.json({ ok: true, water });
 }));
 
 // 반복 일정 예외: 특정 날짜 건너뛰기 또는 그 회차만 수정
@@ -346,10 +354,16 @@ app.patch("/api/tasks/:id", ah(async (req, res) => {
   const must = "must" in b ? (b.must ? 1 : 0) : cur.must;
   // 완료로 바뀌는 순간의 시각을 남긴다(되돌리면 지운다) — 나중에 "언제 해냈나"를 볼 수 있게
   const doneAt = done ? (cur.done ? cur.done_at : nowStamp()) : null;
-  await run(`UPDATE tasks SET title = ?, due = ?, done = ?, done_at = ?, plan_at = ?, archived = ?, must = ?
-    WHERE id = ? AND "user" = ?`,
-    [title, due, done, doneAt, planAt, archived, must, req.params.id, user]);
-  res.json({ ok: true });
+  // 완료로 바뀌면 💧(핵심이면 +2, 아니면 +1), 되돌리면 회수
+  const key = `task:${cur.id}`;
+  const [, water] = await Promise.all([
+    run(`UPDATE tasks SET title = ?, due = ?, done = ?, done_at = ?, plan_at = ?, archived = ?, must = ?
+      WHERE id = ? AND "user" = ?`,
+      [title, due, done, doneAt, planAt, archived, must, req.params.id, user]),
+    done && !cur.done ? earn(user, key, cur.star_date ? 2 : 1, title)
+      : !done && cur.done ? revoke(user, key) : 0,
+  ]);
+  res.json({ ok: true, water });
 }));
 
 // 오늘의 핵심 3개 지정/해제. body: { date, star }  — 3개를 넘기면 거절한다(제한이 우선순위를 만든다)
@@ -388,6 +402,20 @@ app.get("/api/tasks/archived", ah(async (req, res) => {
 app.delete("/api/tasks/:id", ah(async (req, res) => {
   await run('DELETE FROM tasks WHERE id = ? AND "user" = ?', [req.params.id, userOf(req)]);
   res.json({ ok: true });
+}));
+
+// ── 정원 (src/garden.js) ── 받은 물로 식물 키우기
+app.get("/api/garden", ah(async (req, res) => res.json(await gardenState(userOf(req)))));
+app.post("/api/garden/water", ah(async (req, res) => {
+  const user = userOf(req);
+  const n = Math.max(1, Math.min(999, Math.round(Number(req.body?.n) || 1)));
+  const used = await water(user, n);
+  res.json({ used, ...await gardenState(user) });
+}));
+app.post("/api/garden/harvest", ah(async (req, res) => {
+  const user = userOf(req);
+  if (!await harvest(user)) return res.status(400).json({ error: "아직 다 자라지 않았어요" });
+  res.json(await gardenState(user));
 }));
 
 // ── 메모장 CRUD ── (updated 정렬에 day.js의 nowStamp 사용)

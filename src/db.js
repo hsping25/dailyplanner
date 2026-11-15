@@ -161,6 +161,29 @@ export async function initDb() {
     used_on TEXT NOT NULL,
     PRIMARY KEY ("user", date)
   )`);
+  // 정원(src/garden.js). water_log = 받은 물 기록. key = task:<id> | ev:<id>:<date> —
+  // 같은 완료로 두 번 받지 않고, 체크를 풀면 행을 지워 회수한다. label = 화면에 보일 제목.
+  await run(`CREATE TABLE IF NOT EXISTS water_log (
+    "user" TEXT NOT NULL,
+    key TEXT NOT NULL,
+    amount INTEGER NOT NULL,
+    label TEXT,
+    created TEXT NOT NULL,
+    PRIMARY KEY ("user", key)
+  )`);
+  // plants: grown_at이 null이면 키우는 중(아이디당 하나), 아니면 온실. given = 지금까지 준 물(잔고 계산용),
+  // growth = 그중 자라는 데 쓴 물, revive = 시든 걸 살리는 데 아직 남은 물, last_watered = 마지막으로 물 준 날.
+  await run(`CREATE TABLE IF NOT EXISTS plants (
+    id ${AUTO},
+    "user" TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    given INTEGER NOT NULL DEFAULT 0,
+    growth INTEGER NOT NULL DEFAULT 0,
+    revive INTEGER NOT NULL DEFAULT 0,
+    started TEXT NOT NULL,
+    last_watered TEXT NOT NULL,
+    grown_at TEXT
+  )`);
   // 메모장: 자유 메모. kind='text'면 content는 글, 'draw'면 PNG 데이터 URL(손그림).
   // updated는 "YYYY-MM-DDTHH:MM" 로컬 시각(정렬용).
   await run(`CREATE TABLE IF NOT EXISTS memos (

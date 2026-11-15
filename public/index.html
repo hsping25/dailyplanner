@@ -24,6 +24,10 @@
     --warn: #dc2626;         /* 지난 할 일 */
     --line: #eceef1;
     --card: #f6f7f9;
+    /* 정원 탭 전용(식물 그림에만). 3색 원칙의 유일한 예외 — 다른 화면엔 쓰지 않는다. */
+    --leaf: #3f9e4d;
+    --soil: #7a5236;
+    --pot: #c8734a;
   }
   :root[data-theme="dark"] {
     --bg: #101216;
@@ -34,6 +38,9 @@
     --warn: #f87171;
     --line: #23262c;
     --card: #191c21;
+    --leaf: #5cbf6a;
+    --soil: #5e3f2a;
+    --pot: #b0623d;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme]) {
@@ -45,6 +52,9 @@
       --warn: #f87171;
       --line: #23262c;
       --card: #191c21;
+      --leaf: #5cbf6a;
+      --soil: #5e3f2a;
+      --pot: #b0623d;
     }
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -1187,6 +1197,62 @@
   #tm-pause { background: var(--card); color: var(--ink); }
   #tm-stop { background: var(--card); color: var(--warn); }
 
+  /* ── 정원 뷰 ── 받은 물로 식물 키우기. 식물 그림에만 --leaf/--soil/--pot과 꽃잎 색을 쓴다. */
+  #view-garden { display: none; }
+  .subtop .switch button { padding: 8px 10px; }   /* 탭 다섯 개가 좁은 폰에 들어가게 */
+  .dayscore .water { font-size: 14px; font-weight: 700; color: var(--accent); flex-shrink: 0; font-variant-numeric: tabular-nums; }
+  .water-pop {
+    position: fixed; left: 50%; bottom: 120px; z-index: 50;
+    transform: translateX(-50%);
+    background: var(--ink); color: var(--bg);
+    font-size: 15px; font-weight: 800;
+    padding: 8px 16px; border-radius: 99px;
+    pointer-events: none;
+    animation: water-pop 1.3s ease-out forwards;
+  }
+  @keyframes water-pop {
+    0% { opacity: 0; transform: translate(-50%, 10px); }
+    15%, 70% { opacity: 1; transform: translate(-50%, 0); }
+    100% { opacity: 0; transform: translate(-50%, -16px); }
+  }
+  .gd-water { font-size: 17px; font-weight: 800; color: var(--accent); font-variant-numeric: tabular-nums; }
+  .gd-card { background: var(--card); border-radius: 16px; padding: 16px; text-align: center; }
+  .gd-stage { position: relative; display: flex; justify-content: center; }
+  .gd-stage svg { width: 200px; height: auto; }
+  .gd-drop {
+    position: absolute; left: 50%; top: 0;
+    font-size: 22px; pointer-events: none;
+    animation: gd-drop 0.7s ease-in forwards;
+  }
+  @keyframes gd-drop {
+    0% { opacity: 0; transform: translate(-50%, 0); }
+    20% { opacity: 1; }
+    100% { opacity: 0; transform: translate(-50%, 110px); }
+  }
+  .gd-name { font-size: 19px; font-weight: 800; margin-top: 8px; }
+  .gd-prog { height: 8px; background: var(--line); border-radius: 99px; overflow: hidden; margin: 10px 0; }
+  .gd-prog i { display: block; height: 100%; background: var(--accent); }
+  .gd-msg { font-size: 15px; color: var(--ink-dim); min-height: 1.4em; }
+  .gd-msg.warn { color: var(--warn); font-weight: 700; }
+  .gd-btns { display: flex; gap: 8px; margin-top: 14px; }
+  .gd-btns button {
+    flex: 1; border: none; border-radius: 12px;
+    background: var(--accent); color: #fff;
+    font-family: inherit; font-size: 16px; font-weight: 700;
+    padding: 13px 8px; cursor: pointer;
+  }
+  .gd-btns button.sub { background: var(--bg); color: var(--ink); border: 1.5px solid var(--line); }
+  .gd-btns button:disabled { opacity: 0.4; cursor: default; }
+  .gd-hint { font-size: 13px; color: var(--ink-dim); margin-top: 10px; line-height: 1.5; }
+  .gd-house { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; }
+  .gd-house .pl { background: var(--card); border-radius: 12px; padding: 8px 4px; text-align: center; font-size: 13px; }
+  .gd-house .pl svg { width: 64px; height: auto; display: block; margin: 0 auto 4px; }
+  .gd-house .pl em { display: block; font-style: normal; color: var(--ink-dim); font-size: 12px; }
+  .gd-log { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 15px; }
+  .gd-log span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .gd-log b { color: var(--accent); flex-shrink: 0; }
+  .gd-empty { font-size: 14px; color: var(--ink-dim); padding: 8px 0; }
+
   /* ── 가로 모드: 폭을 넓게 쓰고 하단 입력바 여백 줄임 ── */
   @media (orientation: landscape) {
     body { max-width: 720px; padding-bottom: 110px; }
@@ -1216,6 +1282,7 @@
     <button id="btn-blocks">시간표</button>
     <button id="btn-memo">메모장</button>
     <button id="btn-timer">타이머</button>
+    <button id="btn-garden">정원</button>
   </div>
   <span id="who" class="who"></span>
 </div>
@@ -1348,6 +1415,31 @@
   </section>
 </div>
 
+<div id="view-garden">
+  <section>
+    <div class="memo-head">
+      <h2>정원</h2>
+      <div class="gd-water" id="gd-water"></div>
+    </div>
+    <div class="gd-card">
+      <div class="gd-stage" id="gd-stage"></div>
+      <div class="gd-name" id="gd-name"></div>
+      <div class="gd-prog"><i id="gd-prog"></i></div>
+      <div class="gd-msg" id="gd-msg"></div>
+      <div class="gd-btns" id="gd-btns"></div>
+    </div>
+    <p class="gd-hint">할 일 완료 💧1 · 핵심(★) 💧2 · 일정 완료 💧1<br>사흘 넘게 물을 안 주면 시들어요. 시든 식물은 물로 먼저 살려야 다시 자라요.</p>
+  </section>
+  <section>
+    <h2>온실</h2>
+    <div class="gd-house" id="gd-house"></div>
+  </section>
+  <section>
+    <h2>최근 받은 물</h2>
+    <div id="gd-recent"></div>
+  </section>
+</div>
+
 <div class="draw-modal" id="draw-modal" hidden>
   <div class="draw-top">
     <div class="switch">
@@ -1435,6 +1527,7 @@ const todayStr = data.date;        // 서버 기준 논리적 오늘(새벽 4시
 let viewDate = data.date;
 let events = [], tasks = [], weekData = [], taskById = new Map();
 let scores = [], dayLogRow = null, streakN = 0, goals = [], aiWeekPending = false;
+let waterN = 0;                   // 정원 물 잔고 (성적 바의 💧)
 let attend = null, attSkew = 0;   // 공부 세션 상태 + 서버 시계와의 차이(ms)
 
 function applyData(d) {
@@ -1449,6 +1542,7 @@ function applyData(d) {
   streakN = d.streak ?? 0;
   goals = d.goals ?? [];
   aiWeekPending = !!d.aiWeekPending;
+  waterN = d.water ?? 0;
   if (d.attend) setAttend(d.attend);
 }
 // 화살표를 연타하면 요청이 겹친다. 마지막 요청만 화면에 반영하고 늦게 온 응답은 버린다.
@@ -1663,6 +1757,7 @@ function renderDayScore() {
   dayScoreEl.innerHTML = `
     <div class="num">${s.done}/${s.planned}${s.dropped ? ` <em>버림 ${s.dropped}</em>` : ""}</div>
     ${note || `<div class="bar"><i style="width:${pct}%"></i><u style="width:${dropPct}%"></u></div>`}
+    <div class="water">💧${waterN}</div>
     <button id="close-day" class="${closed ? "closed" : ""}">${closed ? "다시 닫기" : "하루 닫기"}</button>`;
   document.getElementById("close-day").onclick = openCloseDay;
 }
@@ -1685,7 +1780,7 @@ function goalDoneToday() {
 }
 function renderAttend() {
   clearInterval(attTick); attTick = null;
-  const hidden = !attend || viewDate !== todayStr || ["memo", "timer"].includes(localStorage.getItem("view"));
+  const hidden = !attend || viewDate !== todayStr || ["memo", "timer", "garden"].includes(localStorage.getItem("view"));
   attendEl.hidden = hidden;
   if (hidden) return;
   const flame = attend.streak >= 1
@@ -1937,7 +2032,7 @@ eventsEl.addEventListener("click", ev => {
     apiFetch(`/api/events/${row.dataset.id}/done`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ date: row.dataset.date, done: willDone }),
-    }).then(() => refreshScores()).catch(() => {});
+    }).then(r => r.json()).then(j => { gotWater(j.water); refreshScores(); }).catch(() => {});
   } else {
     openEventEditor(Number(row.dataset.id), row.dataset.date);
   }
@@ -1956,7 +2051,7 @@ function toggleTaskDone(row, id) {
   apiFetch(`/api/tasks/${id}`, {
     method: "PATCH", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ done: willDone }),
-  }).then(() => refreshScores()).catch(() => {});
+  }).then(r => r.json()).then(j => { gotWater(j.water); refreshScores(); }).catch(() => {});
   renderFocus3();
 }
 
@@ -2028,23 +2123,27 @@ const btnList = document.getElementById("btn-list");
 const btnBlocks = document.getElementById("btn-blocks");
 const btnMemo = document.getElementById("btn-memo");
 const btnTimer = document.getElementById("btn-timer");
+const btnGarden = document.getElementById("btn-garden");
 const viewList = document.getElementById("view-list");
 const viewBlocks = document.getElementById("view-blocks");
 const viewMemo = document.getElementById("view-memo");
 const viewTimer = document.getElementById("view-timer");
+const viewGarden = document.getElementById("view-garden");
 const heroEl = document.getElementById("next-event");
 const chatBarEl = document.querySelector(".chat-bar");
 function showView(name) {
-  // 메모장·타이머는 날짜와 무관 → 히어로와 일정 입력바를 감춘다
-  const hideDate = name === "memo" || name === "timer";
+  // 메모장·타이머·정원은 날짜와 무관 → 히어로와 일정 입력바를 감춘다
+  const hideDate = name === "memo" || name === "timer" || name === "garden";
   viewList.style.display = name === "list" ? "" : "none";
   viewBlocks.style.display = name === "blocks" ? "block" : "none";
   viewMemo.style.display = name === "memo" ? "block" : "none";
   viewTimer.style.display = name === "timer" ? "block" : "none";
+  viewGarden.style.display = name === "garden" ? "block" : "none";
   btnList.classList.toggle("on", name === "list");
   btnBlocks.classList.toggle("on", name === "blocks");
   btnMemo.classList.toggle("on", name === "memo");
   btnTimer.classList.toggle("on", name === "timer");
+  btnGarden.classList.toggle("on", name === "garden");
   heroEl.style.display = hideDate ? "none" : "";
   chatBarEl.style.display = hideDate ? "none" : "";
   if (hideDate) dayScoreEl.style.display = "none";
@@ -2052,12 +2151,141 @@ function showView(name) {
   localStorage.setItem("view", name);
   renderAttend();
   if (name === "memo") loadMemos();
+  if (name === "garden") loadGarden();
   localStorage.setItem("view", name);
 }
 btnList.onclick = () => showView("list");
 btnBlocks.onclick = () => showView("blocks");
 btnMemo.onclick = () => showView("memo");
 btnTimer.onclick = () => showView("timer");
+btnGarden.onclick = () => showView("garden");
+
+// ── 물 받기 알림 ── 할 일·일정을 체크하면 서버가 바뀐 양(+1/+2, 풀면 음수)을 돌려준다
+function gotWater(delta) {
+  if (!delta) return;
+  waterN += delta;
+  renderDayScore();
+  document.querySelector(".water-pop")?.remove();
+  const el = document.createElement("div");
+  el.className = "water-pop";
+  el.textContent = delta > 0 ? `💧+${delta}` : `💧${delta} 회수`;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 1400);
+}
+
+// ── 정원 ── 규칙은 src/garden.js. 그림은 종류(꽃잎 색·개수) × 단계(0 씨앗~4 꽃) × 시듦(0~2)으로 그린다.
+const KIND_LOOK = {
+  "데이지":   { petal: "#ffffff", edge: "#cfcfcf", center: "#f2c230", n: 12, len: 12, wid: 4 },
+  "해바라기": { petal: "#f6bd16", edge: "#d99a00", center: "#6b4220", n: 16, len: 13, wid: 4.5 },
+  "코스모스": { petal: "#ec6fa6", edge: "#c94d86", center: "#f2c230", n: 8, len: 13, wid: 6 },
+  "도라지":   { petal: "#8b6fd6", edge: "#6c50b8", center: "#f4efff", n: 5, len: 12, wid: 8 },
+  "동백":     { petal: "#e0464b", edge: "#b8343a", center: "#f6d24a", n: 6, len: 11, wid: 8.5 },
+};
+function plantSvg(kind, stage, wilt = 0) {
+  const k = KIND_LOOK[kind] ?? KIND_LOOK["데이지"];
+  const bx = 60, by = 119;
+  const h = [0, 24, 52, 74, 82][stage];
+  const bend = [0, 14, 28][wilt];               // 시들면 줄기가 옆으로 휘고 끝이 처진다
+  const cx = bx, cy = by - h * 0.6;
+  const tx = bx + bend, ty = by - h + bend * 0.5;
+  const at = t => [(1 - t) ** 2 * bx + 2 * (1 - t) * t * cx + t * t * tx,
+                   (1 - t) ** 2 * by + 2 * (1 - t) * t * cy + t * t * ty];
+  const leaf = ([x, y], side, s) => `<ellipse cx="${x + side * s}" cy="${y}" rx="${s}" ry="${s * 0.42}"
+    transform="rotate(${side * (-30 + wilt * 35)} ${x} ${y})" fill="var(--leaf)"/>`;
+  let g = "";
+  if (stage === 0) {
+    g = `<ellipse cx="${bx}" cy="${by - 2}" rx="6" ry="4" fill="#c9a46a" stroke="var(--soil)" stroke-width="1"/>`;
+  } else {
+    g += `<path d="M${bx},${by} Q${cx},${cy} ${tx},${ty}" fill="none" stroke="var(--leaf)"
+      stroke-width="${stage >= 2 ? 4 : 3}" stroke-linecap="round"/>`;
+    if (stage === 1) g += leaf(at(1), -1, 8) + leaf(at(1), 1, 8);
+    else for (const [t, s] of [[0.35, 12], [0.65, 10]]) g += leaf(at(t), -1, s) + leaf(at(t), 1, s);
+    const tilt = wilt * 28;
+    if (stage === 3) {
+      g += `<g transform="rotate(${tilt} ${tx} ${ty})">
+        <ellipse cx="${tx}" cy="${ty - 10}" rx="7.5" ry="12" fill="${k.petal}" stroke="${k.edge}" stroke-width="1"/>
+        ${leaf([tx, ty], -1, 5)}${leaf([tx, ty], 1, 5)}</g>`;
+    } else if (stage === 4) {
+      const L = k.len * 1.7, W = k.wid * 1.7;   // 꽃송이가 줄기에 비해 작아 보이지 않게
+      let petals = "";
+      for (let i = 0; i < k.n; i++) {
+        petals += `<ellipse cx="${tx}" cy="${ty - L * 0.6}" rx="${W / 2}" ry="${L / 2}"
+          transform="rotate(${(i * 360) / k.n} ${tx} ${ty})" fill="${k.petal}" stroke="${k.edge}" stroke-width="0.8"/>`;
+      }
+      g += `<g transform="rotate(${tilt} ${tx} ${ty})">${petals}
+        <circle cx="${tx}" cy="${ty}" r="${L * 0.45}" fill="${k.center}"/></g>`;
+    }
+  }
+  const filter = ["none", "saturate(.5)", "saturate(.25) sepia(.4)"][wilt];
+  return `<svg viewBox="0 0 120 160" aria-hidden="true">
+    <path d="M32,122 L88,122 L82,156 L38,156 Z" fill="var(--pot)"/>
+    <rect x="27" y="113" width="66" height="10" rx="3" fill="var(--pot)"/>
+    <rect x="27" y="113" width="66" height="10" rx="3" fill="#000" opacity=".12"/>
+    <ellipse cx="${bx}" cy="${by - 1}" rx="30" ry="3.5" fill="var(--soil)"/>
+    <g style="filter:${filter}">${g}</g>
+  </svg>`;
+}
+
+const gdStageEl = document.getElementById("gd-stage");
+async function loadGarden() {
+  try { renderGarden(await (await apiFetch("/api/garden")).json()); } catch {}
+}
+function renderGarden(g) {
+  waterN = g.water;
+  const p = g.plant;
+  document.getElementById("gd-water").textContent = `💧${g.water}`;
+  gdStageEl.innerHTML = plantSvg(p.kind, p.stage, p.wilt);
+  document.getElementById("gd-name").textContent = `${p.kind} · ${p.stageName}`;
+  document.getElementById("gd-prog").style.width = `${Math.min(100, (p.growth / g.goal) * 100)}%`;
+  const msg = document.getElementById("gd-msg");
+  msg.classList.toggle("warn", p.wilt > 0);
+  msg.textContent = p.grown ? "다 자랐어요! 온실로 옮기고 새 씨앗을 받으세요."
+    : p.wilt ? `${p.wilt === 2 ? "많이 " : ""}시들었어요 — 💧${p.need}방울이면 살아나요`
+    : `다음 단계(${g.stages[p.stage + 1].name})까지 💧${p.toNext}`;
+  const btns = document.getElementById("gd-btns");
+  if (p.grown) {
+    btns.innerHTML = `<button id="gd-harvest">🏡 온실로 옮기기</button>`;
+    document.getElementById("gd-harvest").onclick = harvestPlant;
+  } else {
+    const off = g.water <= 0 ? "disabled" : "";
+    btns.innerHTML = `<button id="gd-one" ${off}>💧 한 방울</button>
+      <button id="gd-all" class="sub" ${off}>모두 주기${g.water > 0 ? ` (${g.water})` : ""}</button>`;
+    document.getElementById("gd-one").onclick = () => waterPlant(1);
+    document.getElementById("gd-all").onclick = () => waterPlant(g.water);
+  }
+  const fmtMd = d => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
+  document.getElementById("gd-house").innerHTML = g.greenhouse.length
+    ? g.greenhouse.map(h => `<div class="pl">${plantSvg(h.kind, 4)}${esc(h.kind)}<em>${fmtMd(h.grown_at)}</em></div>`).join("")
+    : `<div class="gd-empty">다 키운 꽃이 여기 모여요.</div>`;
+  document.getElementById("gd-recent").innerHTML = g.recent.length
+    ? g.recent.map(r => `<div class="gd-log"><span>${esc(r.label ?? "")}</span><b>💧+${r.amount}</b></div>`).join("")
+    : `<div class="gd-empty">아직 받은 물이 없어요. 할 일을 끝내면 물이 생겨요.</div>`;
+}
+async function waterPlant(n) {
+  document.querySelectorAll("#gd-btns button").forEach(b => (b.disabled = true));
+  try {
+    const j = await (await apiFetch("/api/garden/water", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ n }),
+    })).json();
+    // 물방울이 떨어진 뒤에 자란 모습으로 바꿔 그린다
+    for (let i = 0; i < Math.min(j.used, 3); i++) {
+      setTimeout(() => {
+        const d = document.createElement("div");
+        d.className = "gd-drop";
+        d.textContent = "💧";
+        gdStageEl.appendChild(d);
+        setTimeout(() => d.remove(), 750);
+      }, i * 180);
+    }
+    setTimeout(() => renderGarden(j), j.used ? 650 + Math.min(j.used, 3) * 180 : 0);
+  } catch { loadGarden(); }
+}
+async function harvestPlant() {
+  const r = await apiFetch("/api/garden/harvest", { method: "POST" });
+  if (!r.ok) return loadGarden();
+  renderGarden(await r.json());
+}
 
 // ── 메모장: 목록 불러오기 + 자동 저장(입력 멈추면) + 삭제 ──
 const memosEl = document.getElementById("memos");
@@ -2448,7 +2676,7 @@ async function askTargetDone() {
   await apiFetch(`/api/tasks/${id}`, {
     method: "PATCH", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ done: true }),
-  }).catch(() => {});
+  }).then(r => r.json()).then(j => gotWater(j.water)).catch(() => {});
   loadDay(viewDate);
 }
 // 할 일의 ▶ → 타이머 뷰로 넘어가며 그 할 일을 걸고 **스톱워치로** 바로 시작.
