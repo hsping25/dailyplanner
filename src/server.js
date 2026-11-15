@@ -4,13 +4,13 @@ import { fileURLToPath } from "node:url";
 import { get, all, run, insert, initDb } from "./db.js";
 import { parseText } from "./parse.js";
 import { todayStr, shiftDate, weekStart, nowStamp, dayWindow, eventsInWindow, loadEvents, expand } from "./day.js";
-import { dayScore, closeDay, dayLog, scoresBetween } from "./review.js";
+import { dayScore, closeDay, dayLog, scoresBetween, starCount } from "./review.js";
 import { streak, attendStatus, startSession, finishSession, cancelSession, AttendError } from "./attend.js";
 import { startNotifier } from "./notify.js";
 import { startSchedules } from "./schedule.js";
 import { getBotUsername } from "./telegram.js";
 import { linkCode, linkStatus, unlink, startTgPoller } from "./tglink.js";
-import { dayNote, weekReport, applySuggestion, weekReportPending } from "./ai.js";
+import { dayNote, weekReport, applySuggestion, weekReportPending, dayFatigue } from "./ai.js";
 import { earn, revoke, balance, gardenState, water, harvest } from "./garden.js";
 
 const app = express();
@@ -37,6 +37,21 @@ const userOf = req => {
   return v.trim() || "기본";
 };
 
+// 그날 목록에 보이는 할 일. 버린 것(archived)은 안 보인다. 핵심(star_date)은 마감이 없어도 그날 목록에 올라온다.
+const dayTasks = (user, date) => all(
+  `SELECT * FROM tasks WHERE "user" = ? AND archived = 0
+     AND (done = 0 OR due = ? OR star_date = ?)
+   ORDER BY CASE WHEN star_date = ? THEN 0 ELSE 1 END, due IS NULL, due, id`,
+  [user, date, date, date]);
+const yMood = (user, date) =>
+  get('SELECT mood FROM day_log WHERE "user" = ? AND date = ?', [user, shiftDate(date, -1)]).then(r => r?.mood ?? null);
+// 헤더 ✨ 옆 피로도 숫자 — ✨ 시트(ai.js dayContext)와 같은 dayFatigue로 계산 (펼치기만, DB 접근 없음)
+function fatigueFor(loaded, date, tasks, ymood) {
+  const w = dayWindow(date), yw = dayWindow(shiftDate(date, -1));
+  const f = dayFatigue(date, expand(loaded, w.start, w.end), expand(loaded, yw.start, yw.end), tasks, ymood);
+  return { score: f.score, level: f.level, factors: f.factors };
+}
+
 // ── 읽기 화면용: 그날의 일정 + 할 일 + 주간 점 개수 ──
 app.get("/api/day", ah(async (req, res) => {
   const user = userOf(req);
@@ -51,12 +66,8 @@ app.get("/api/day", ah(async (req, res) => {
   // 순차로 await하면 날짜를 넘길 때마다 그만큼 기다리게 된다.
   const loaded = await loadEvents(user);
   const byDay = expandWeek(loaded, monday);
-  const [tasks, week, scores, log, attend, goals, aiWeekPending, waterN] = await Promise.all([
-    // 버린 것(archived)은 안 보인다. 핵심(star_date)은 마감이 없어도 그날 목록에 올라온다.
-    all(`SELECT * FROM tasks WHERE "user" = ? AND archived = 0
-           AND (done = 0 OR due = ? OR star_date = ?)
-         ORDER BY CASE WHEN star_date = ? THEN 0 ELSE 1 END, due IS NULL, due, id`,
-      [user, date, date, date]),
+  const [tasks, week, scores, log, attend, goals, aiWeekPending, waterN, ddays, bigGoal, ymood] = await Promise.all([
+    dayTasks(user, date),
     weekFor(monday, sunday, user, byDay),
     scoresBetween(user, monday, sunday, loaded, byDay),
     dayLog(user, date),
@@ -64,6 +75,9 @@ app.get("/api/day", ah(async (req, res) => {
     all('SELECT * FROM goals WHERE "user" = ? AND week = ? ORDER BY id', [user, monday]),
     weekReportPending(user, shiftDate(weekStart(todayStr()), -7)),
     balance(user),
+    all('SELECT id, title, date FROM ddays WHERE "user" = ? ORDER BY date, id', [user]),
+    get("SELECT v FROM kv WHERE k = ?", [`goal|${user}`]).then(r => r?.v ?? ""),
+    yMood(user, date),
   ]);
 
   res.json({
@@ -72,7 +86,35 @@ app.get("/api/day", ah(async (req, res) => {
     tasks, week, scores, log, streak: attend.streak, attend, goals,
     aiWeekPending,   // 지난주 AI 리포트를 아직 안 받았으면 ✨에 점
     water: waterN,   // 성적 바의 💧잔고
+    ddays, bigGoal,  // 위 띠: 디데이 + 장기 목표 한 줄
+    fatigue: fatigueFor(loaded, date, tasks, ymood),
   });
+}));
+
+// 체크박스를 누른 뒤 피로도 숫자만 다시 (성적 갱신과 함께 디바운스되어 불린다)
+app.get("/api/fatigue", ah(async (req, res) => {
+  const user = userOf(req);
+  const date = req.query.date || todayStr();
+  const [loaded, tasks, ymood] = await Promise.all([loadEvents(user), dayTasks(user, date), yMood(user, date)]);
+  res.json(fatigueFor(loaded, date, tasks, ymood));
+}));
+
+// ── 디데이 / 장기 목표 (위 띠) ──
+app.post("/api/ddays", ah(async (req, res) => {
+  const title = String(req.body?.title ?? "").trim(), date = String(req.body?.date ?? "");
+  if (!title || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: "이름과 날짜를 적어 주세요" });
+  res.json({ id: await insert('INSERT INTO ddays ("user", title, date) VALUES (?, ?, ?)', [userOf(req), title, date]) });
+}));
+app.delete("/api/ddays/:id", ah(async (req, res) => {
+  await run('DELETE FROM ddays WHERE id = ? AND "user" = ?', [req.params.id, userOf(req)]);
+  res.json({ ok: true });
+}));
+// 장기 목표는 아이디당 한 줄 — kv에 goal|<아이디>로. 비우면 지운다.
+app.put("/api/goal", ah(async (req, res) => {
+  const k = `goal|${userOf(req)}`, text = String(req.body?.text ?? "").trim().slice(0, 100);
+  if (text) await run(`INSERT INTO kv (k, v) VALUES (?, ?) ON CONFLICT (k) DO UPDATE SET v = EXCLUDED.v`, [k, text]);
+  else await run("DELETE FROM kv WHERE k = ?", [k]);
+  res.json({ ok: true, text });
 }));
 
 // 월요일부터 7일치를 한 번에 펼쳐 date → 일정 배열로 (순수 계산, DB 접근 없음)
@@ -292,6 +334,26 @@ app.delete("/api/events/:id", ah(async (req, res) => {
   if (r.changes) {
     await run("DELETE FROM event_exceptions WHERE event_id = ?", [req.params.id]);
     await run("DELETE FROM event_done WHERE event_id = ?", [req.params.id]);
+    await run("DELETE FROM event_star WHERE event_id = ?", [req.params.id]);
+  }
+  res.json({ ok: true });
+}));
+
+// 일정 회차를 오늘 핵심으로 지정/해제. body: { date(회차 날짜), day(보는 날 — 3칸 제한을 셀 날), star }
+app.post("/api/events/:id/star", ah(async (req, res) => {
+  const user = userOf(req);
+  const { date, day = todayStr(), star = true } = req.body ?? {};
+  if (!date) return res.status(400).json({ error: "date는 필수" });
+  const [owns, already] = await Promise.all([
+    get('SELECT 1 FROM events WHERE id = ? AND "user" = ?', [req.params.id, user]),
+    get("SELECT 1 FROM event_star WHERE event_id = ? AND date = ?", [req.params.id, date]),
+  ]);
+  if (!owns) return res.status(404).json({ error: "없는 일정" });
+  if (star && !already) {
+    if (await starCount(user, day) >= 3) return res.status(400).json({ error: "핵심은 3개까지예요. 하나를 빼고 다시 골라 보세요." });
+    await run("INSERT INTO event_star (event_id, date) VALUES (?, ?) ON CONFLICT (event_id, date) DO NOTHING", [req.params.id, date]);
+  } else if (!star) {
+    await run("DELETE FROM event_star WHERE event_id = ? AND date = ?", [req.params.id, date]);
   }
   res.json({ ok: true });
 }));
@@ -372,11 +434,9 @@ app.post("/api/tasks/:id/star", ah(async (req, res) => {
   const { date = todayStr(), star = true } = req.body ?? {};
   const cur = await get('SELECT * FROM tasks WHERE id = ? AND "user" = ?', [req.params.id, user]);
   if (!cur) return res.status(404).json({ error: "없는 할 일" });
-  if (star) {
-    const n = Number((await get(
-      'SELECT COUNT(*) AS c FROM tasks WHERE "user" = ? AND archived = 0 AND star_date = ? AND id <> ?',
-      [user, date, req.params.id]))?.c ?? 0);
-    if (n >= 3) return res.status(400).json({ error: "핵심은 3개까지예요. 하나를 빼고 다시 골라 보세요." });
+  // 일정 핵심과 합쳐 3칸. 이미 그날 핵심인 걸 다시 누른 건 세지 않는다.
+  if (star && cur.star_date !== date) {
+    if (await starCount(user, date) >= 3) return res.status(400).json({ error: "핵심은 3개까지예요. 하나를 빼고 다시 골라 보세요." });
   }
   await run('UPDATE tasks SET star_date = ? WHERE id = ? AND "user" = ?',
     [star ? date : null, req.params.id, user]);

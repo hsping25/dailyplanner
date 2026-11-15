@@ -4,7 +4,7 @@
 //   - 그날 일정 회차(종일 포함)
 //   - 그날 마감인 할 일
 //   - 그날 핵심(star_date)으로 뽑은 할 일
-//   같은 할 일이 마감+핵심이면 한 번만 센다.
+//   같은 할 일이 마감+핵심이면 한 번만 센다. 핵심으로 뽑은 일정은 이미 일정으로 세었으니 핵심 칸(star*)에만 더한다.
 //
 // **버린 것(archived)도 분모에 남는다.** 목록에서는 치우되 그날 계획에는 있었던 것이므로,
 // 안 하고 버린 걸 없던 일로 치면 동그라미가 꽉 차서 숫자가 거짓말을 한다.
@@ -47,7 +47,7 @@ export async function dayScore(user, date, loaded) {
   const events = expand(loaded, start, end);
   const tasks = await tasksForDate(user, date);
 
-  const stars = tasks.filter(t => t.star_date === date);
+  const stars = [...tasks.filter(t => t.star_date === date), ...events.filter(e => e.star)];
   return {
     date,
     planned: events.length + tasks.length,          // 버린 것 포함 (계획에는 있었으니까)
@@ -67,6 +67,17 @@ export function leftovers(score) {
   };
 }
 
+// 그날 핵심 개수 = 핵심 할 일 + 핵심으로 뽑은 일정 회차. 3칸 제한을 걸 때 쓴다.
+// 일정은 회차 날짜로 저장되므로 그날 창(04시 경계)으로 펼쳐서 센다 — 건너뛴 회차는 자연히 빠진다.
+export async function starCount(user, date) {
+  const [row, loaded] = await Promise.all([
+    get('SELECT COUNT(*) AS c FROM tasks WHERE "user" = ? AND archived = 0 AND star_date = ?', [user, date]),
+    loadEvents(user),
+  ]);
+  const { start, end } = dayWindow(date);
+  return Number(row?.c ?? 0) + expand(loaded, start, end).filter(e => e.star).length;
+}
+
 export function ratio(planned, done) {
   return planned ? Math.round((done / planned) * 100) : null;
 }
@@ -76,9 +87,7 @@ export function ratio(planned, done) {
 export async function applyActions(user, date, actions = []) {
   const tomorrow = shiftDate(date, 1);
   // 내일 핵심이 이미 몇 개인지 — 이월하면서 3칸을 넘기지 않도록
-  let starRoom = 3 - Number(
-    (await get('SELECT COUNT(*) AS c FROM tasks WHERE "user" = ? AND archived = 0 AND star_date = ?',
-      [user, tomorrow]))?.c ?? 0);
+  let starRoom = 3 - await starCount(user, tomorrow);
 
   for (const { id, action } of actions) {
     const t = await get('SELECT * FROM tasks WHERE id = ? AND "user" = ?', [id, user]);
@@ -165,7 +174,7 @@ export async function scoresBetween(user, from, to, loaded, byDay = null) {
     const w = dayWindow(d);
     const events = byDay?.get(d) ?? expand(loaded, w.start, w.end);
     const tasks = [...(tasksByDate.get(d)?.values() ?? [])];
-    const stars = tasks.filter(t => t.star_date === d);
+    const stars = [...tasks.filter(t => t.star_date === d), ...events.filter(e => e.star)];   // dayScore와 같은 기준
     out.push({
       date: d,
       planned: events.length + tasks.length,          // 버린 것 포함

@@ -5,7 +5,7 @@
 // 진행 상태는 kv 테이블에 chat별로 저장해서 서버가 재시작돼도 이어진다.
 import { get, run } from "./db.js";
 import { todayStr } from "./day.js";
-import { dayScore, leftovers, ratio, closeDay, applyActions, dayLog } from "./review.js";
+import { dayScore, leftovers, ratio, closeDay, applyActions, dayLog, starCount } from "./review.js";
 import { streak } from "./attend.js";
 import { sendTelegram, api, keyboard, editMessage, answerCallback, forceReply } from "./telegram.js";
 
@@ -36,7 +36,7 @@ export async function composeEvening(user, date = todayStr()) {
     : "오늘은 계획에 잡아 둔 게 없었어요.");
 
   if (s.starPlanned) {
-    const stars = s.tasks.filter(t => t.star_date === date);
+    const stars = [...s.tasks.filter(t => t.star_date === date), ...s.events.filter(e => e.star)];
     lines.push(`⭐ 핵심 ${s.starDone}/${s.starPlanned} — ` +
       stars.map(t => `${t.done ? "✅" : "⬜"} ${t.title}`).join("  "));
   }
@@ -181,9 +181,7 @@ export async function handleText(chat, text) {
 export async function applyAction(user, date, id, action) {
   if (!["tomorrow", "week", "drop", "star"].includes(action)) return;
   if (action === "star") {
-    const n = Number((await get(
-      'SELECT COUNT(*) AS c FROM tasks WHERE "user" = ? AND archived = 0 AND star_date = ?', [user, date]))?.c ?? 0);
-    if (n < 3) await run('UPDATE tasks SET star_date = ? WHERE id = ? AND "user" = ?', [date, id, user]);
+    if (await starCount(user, date) < 3) await run('UPDATE tasks SET star_date = ? WHERE id = ? AND "user" = ?', [date, id, user]);
     return;
   }
   // day_log는 건드리지 않는다 (회고/점수는 마지막 finish에서 한 번에 저장)

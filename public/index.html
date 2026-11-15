@@ -367,6 +367,70 @@
     font-variant-numeric: tabular-nums;
   }
 
+  /* 일정 줄의 ☆ — 할 일 줄과 같은 모양 */
+  .event .star {
+    flex-shrink: 0; width: 30px; height: 32px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 17px; opacity: 0.28; cursor: pointer; user-select: none;
+  }
+  .event .star.on { opacity: 1; }
+  .event.done .star { opacity: 0.15; }
+
+  /* ── 위 띠: 장기 목표 + 디데이 (히어로 위 한 줄) ── */
+  .pins {
+    display: flex; align-items: center; gap: 8px;
+    margin: -8px 0 16px;
+    min-height: 36px;
+    cursor: pointer;
+  }
+  .pins .pin-goal {
+    flex: 1; min-width: 0;
+    font-size: 15px; font-weight: 700;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .pins .dd {
+    flex-shrink: 0;
+    font-size: 14px; font-weight: 800;
+    color: var(--accent);
+    background: var(--card);
+    padding: 6px 10px; border-radius: 99px;
+    white-space: nowrap; font-variant-numeric: tabular-nums;
+  }
+  .pins .dd.today { color: var(--bg); background: var(--warn); }
+  .pins .empty-pin { flex: 1; font-size: 14px; color: var(--ink-dim); border: 1.5px dashed var(--line); border-radius: 10px; padding: 7px 12px; }
+  .pin-dd { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 16px; }
+  .pin-dd b { min-width: 64px; color: var(--accent); font-variant-numeric: tabular-nums; }
+  .pin-dd span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pin-dd em { font-style: normal; font-size: 13px; color: var(--ink-dim); }
+  .pin-dd button { border: none; background: none; color: var(--warn); font-size: 15px; font-weight: 700; padding: 6px; cursor: pointer; }
+  .pin-sec { font-size: 14px; font-weight: 800; color: var(--ink-dim); margin: 18px 0 8px; }
+
+  /* ── 헤더 피로도 (✨ 버튼 안, 숫자+수준) ── 여유=청록 / 보통=파랑 / 빡빡=빨강 */
+  #ai-btn.has-fat { width: auto; padding: 0 8px; display: flex; align-items: center; gap: 4px; }
+  #ai-btn .fat {
+    display: flex; flex-direction: column; align-items: center; line-height: 1.05;
+    font-size: 15px; font-weight: 800; color: var(--accent);
+    font-variant-numeric: tabular-nums;
+  }
+  #ai-btn .fat[hidden] { display: none; }
+  #ai-btn .fat small { font-size: 10px; font-weight: 700; opacity: 0.85; }
+  #ai-btn .fat.lv-여유 { color: var(--accent2); }
+  #ai-btn .fat.lv-빡빡 { color: var(--warn); }
+
+  /* ── 폰 폭: 날짜를 짧게(11/15 (일)), 버튼을 조금 줄이고 "오늘" 버튼은 날짜 아래로 ── */
+  #view-date .dl-short { display: none; }
+  @media (max-width: 480px) {
+    .top { gap: 6px; }
+    .datenav { gap: 2px; }
+    .nav-arrow { width: 32px; }
+    .icon-btn { width: 34px; }
+    .datenav-mid { flex-direction: column; gap: 1px; }
+    #view-date { font-size: 16px; }
+    #view-date .dl-long { display: none; }
+    #view-date .dl-short { display: inline; }
+    #day-today { font-size: 11px; padding: 1px 7px; }
+  }
+
   /* ── 오늘 핵심 3개 ── */
   .focus3 { margin-bottom: 28px; }
   .focus3 .slots { display: flex; flex-direction: column; gap: 8px; }
@@ -391,6 +455,9 @@
   .f3 .play { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; opacity: 0.35; cursor: pointer; }
   .f3.done .box { background: var(--accent); border-color: var(--accent); color: var(--bg); }
   .f3.done .name { color: var(--ink-dim); text-decoration: line-through; font-weight: 500; }
+  /* 핵심으로 뽑은 일정: 시각이 앞에 붙는다. 반복이면 청록. */
+  .f3 .ev-time { font-size: 14px; font-weight: 800; color: var(--accent); flex-shrink: 0; font-variant-numeric: tabular-nums; }
+  .f3.recurring .ev-time { color: var(--accent2); }
   .f3.empty-slot {
     border: 1.5px dashed var(--line);
     background: none;
@@ -1384,7 +1451,7 @@
     </div>
     <button class="nav-arrow" id="day-next" aria-label="다음 날">›</button>
   </div>
-  <button class="icon-btn" id="ai-btn" aria-label="AI 코멘트">✨</button>
+  <button class="icon-btn" id="ai-btn" aria-label="AI 코멘트·피로도">✨<span class="fat" id="fat-num" hidden></span></button>
   <button class="icon-btn" id="bell-btn" aria-label="알림 연결">🔔</button>
   <button class="icon-btn" id="theme-btn" aria-label="테마 전환">🌙</button>
 </div>
@@ -1399,6 +1466,7 @@
   <span id="who" class="who"></span>
 </div>
 
+<div class="pins" id="pins"></div>
 <div class="next" id="next-event"></div>
 <div class="dayscore" id="dayscore" hidden></div>
 <div class="dayscore attend" id="attend" hidden></div>
@@ -1407,7 +1475,7 @@
   <section class="focus3" id="focus3">
     <div class="week-head">
       <h2>오늘 핵심</h2>
-      <span class="week-hint">할 일의 ☆를 눌러 세 개까지</span>
+      <span class="week-hint">할 일·일정의 ☆를 눌러 세 개까지</span>
     </div>
     <div class="slots" id="focus3-slots"></div>
   </section>
@@ -1679,6 +1747,7 @@ let viewDate = data.date;
 let events = [], tasks = [], weekData = [], taskById = new Map();
 let scores = [], dayLogRow = null, streakN = 0, goals = [], aiWeekPending = false;
 let waterN = 0;                   // 정원 물 잔고 (성적 바의 💧)
+let ddays = [], bigGoal = "", fatigueNow = null;   // 위 띠(디데이·장기 목표) + ✨ 옆 피로도
 let attend = null, attSkew = 0;   // 공부 세션 상태 + 서버 시계와의 차이(ms)
 
 function applyData(d) {
@@ -1694,6 +1763,9 @@ function applyData(d) {
   goals = d.goals ?? [];
   aiWeekPending = !!d.aiWeekPending;
   waterN = d.water ?? 0;
+  ddays = d.ddays ?? [];
+  bigGoal = d.bigGoal ?? "";
+  fatigueNow = d.fatigue ?? null;
   if (d.attend) setAttend(d.attend);
 }
 // 화살표를 연타하면 요청이 겹친다. 마지막 요청만 화면에 반영하고 늦게 온 응답은 버린다.
@@ -1804,11 +1876,10 @@ const evTimeLabel = e => e.allday ? "종일" : fmtTime(e.start);
 
 function renderDateNav() {
   const o = dateObj(viewDate);
-  let label = `${o.getMonth() + 1}월 ${o.getDate()}일 (${DAY_NAMES[o.getDay()]})`;
-  if (viewDate === todayStr) label = "오늘 · " + label;
-  else if (viewDate === shiftStr(todayStr, 1)) label = "내일 · " + label;
-  else if (viewDate === shiftStr(todayStr, -1)) label = "어제 · " + label;
-  viewDateEl.textContent = label;
+  const m = o.getMonth() + 1, d = o.getDate(), w = DAY_NAMES[o.getDay()];
+  const rel = viewDate === todayStr ? "오늘 · " : viewDate === shiftStr(todayStr, 1) ? "내일 · "
+    : viewDate === shiftStr(todayStr, -1) ? "어제 · " : "";
+  viewDateEl.innerHTML = `<span class="dl-long">${rel}${m}월 ${d}일 (${w})</span><span class="dl-short">${m}/${d} (${w})</span>`;
   todayBtn.hidden = viewDate === todayStr;
 }
 
@@ -1839,6 +1910,7 @@ function renderEvents() {
     const cls = ["event", e.recurring ? "recurring" : "", e.allday ? "allday" : "", e.done ? "done" : "", past ? "past" : ""].join(" ");
     return `<div class="${cls}" data-id="${e.eventId}" data-date="${e.occurrenceDate}" data-done="${e.done ? 1 : 0}">
       <div class="time">${evTimeLabel(e)}</div><div class="name">${esc(e.title)}</div>
+      <div class="star${e.star ? " on" : ""}" title="오늘 핵심으로">${e.star ? "★" : "☆"}</div>
       <div class="ev-check">${e.done ? "✓" : ""}</div></div>`;
   }).join("");
 }
@@ -1872,13 +1944,86 @@ function renderTasks() {
   tasksEl.innerHTML = html || `<div class="empty">할 일이 없어요</div>`;
 }
 
+// ── 위 띠: 장기 목표 한 줄 + 다가오는 디데이(가까운 순 2개) ── 누르면 편집 시트
+const pinsEl = document.getElementById("pins");
+// 디데이는 보는 날이 아니라 "오늘"(04시 경계) 기준
+const ddayN = d => Math.round((dateObj(d.date) - dateObj(todayStr)) / 86_400_000);
+const ddayLabel = n => n > 0 ? `D-${n}` : n === 0 ? "D-DAY" : `D+${-n}`;
+function renderPins() {
+  const up = ddays.filter(d => ddayN(d) >= 0).slice(0, 2);
+  if (!bigGoal && !up.length) {
+    pinsEl.innerHTML = `<div class="empty-pin">🎯 목표나 디데이를 적어 두세요</div>`;
+    return;
+  }
+  pinsEl.innerHTML = `<div class="pin-goal">${bigGoal ? `🎯 ${esc(bigGoal)}` : ""}</div>` +
+    up.map(d => `<div class="dd${ddayN(d) === 0 ? " today" : ""}">${esc(d.title)} ${ddayLabel(ddayN(d))}</div>`).join("");
+}
+pinsEl.onclick = openPinsSheet;
+function openPinsSheet() {
+  const md = s => `${Number(s.slice(5, 7))}/${Number(s.slice(8, 10))}`;
+  showSheet(`<div class="sheet-title">목표 · 디데이</div>
+    <label class="fld"><span>장기 목표 (한 줄, 비우면 지움)</span>
+      <input id="pin-goal" maxlength="100" placeholder="예: 토익 900점" value="${escapeAttr(bigGoal)}"></label>
+    <div class="pin-sec">디데이</div>
+    ${ddays.map(d => `<div class="pin-dd"><b>${ddayLabel(ddayN(d))}</b><span>${esc(d.title)}</span>
+      <em>${md(d.date)}</em><button data-del="${d.id}">삭제</button></div>`).join("")
+      || `<div class="cp-help">아직 없어요.</div>`}
+    <div class="two" style="margin-top:12px">
+      <label class="fld"><span>이름</span><input id="pin-title" placeholder="예: 수능"></label>
+      <label class="fld"><span>날짜</span><input id="pin-date" type="date"></label>
+    </div>
+    <div class="sheet-btns">
+      <button class="ok" id="pin-save">저장</button>
+      <button class="no" id="pin-cancel">닫기</button>
+    </div>`);
+  document.getElementById("pin-cancel").onclick = closeSheet;
+  sheetEl.querySelectorAll("[data-del]").forEach(b => b.onclick = async () => {
+    await apiFetch(`/api/ddays/${b.dataset.del}`, { method: "DELETE" });
+    ddays = ddays.filter(d => d.id !== Number(b.dataset.del));
+    renderPins();
+    openPinsSheet();
+  });
+  // 저장 = 목표가 바뀌었으면 저장 + 이름·날짜가 둘 다 있으면 디데이 추가
+  document.getElementById("pin-save").onclick = async () => {
+    const goal = document.getElementById("pin-goal").value.trim();
+    const title = document.getElementById("pin-title").value.trim();
+    const date = document.getElementById("pin-date").value;
+    if ((title || date) && !(title && date)) { alert("디데이는 이름과 날짜를 둘 다 적어 주세요."); return; }
+    const jobs = [];
+    if (goal !== bigGoal) jobs.push(apiFetch("/api/goal", {
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: goal }) }));
+    if (title) jobs.push(apiFetch("/api/ddays", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title, date }) }));
+    await Promise.all(jobs);
+    closeSheet();
+    loadDay(viewDate);
+  };
+}
+
+// ── ✨ 버튼 안 피로도 ── 숫자는 서버(ai.js dayFatigue)가 계산한 그대로. 누르면 ✨ 시트(요인 설명)가 열린다.
+const fatEl = document.getElementById("fat-num");
+function renderFatigue() {
+  fatEl.hidden = !fatigueNow;
+  aiBtn.classList.toggle("has-fat", !!fatigueNow);
+  if (!fatigueNow) return;
+  fatEl.className = `fat lv-${fatigueNow.level}`;
+  fatEl.innerHTML = `${fatigueNow.score}<small>${fatigueNow.level}</small>`;
+  aiBtn.title = `피로도 ${fatigueNow.score} (${fatigueNow.level})` +
+    (fatigueNow.factors.length ? ` — ${fatigueNow.factors.join(", ")}` : "");
+}
+
 // ── 오늘 핵심 3개 ── 빈 칸을 남겨 두는 게 핵심: "아직 안 정했다"가 눈에 보여야 정하게 된다.
 const focus3El = document.getElementById("focus3");
 const focus3SlotsEl = document.getElementById("focus3-slots");
 function renderFocus3() {
   const stars = tasks.filter(t => t.star_date === viewDate);
+  const evStars = events.filter(e => e.star);   // 핵심으로 뽑은 일정 — 시간순으로 먼저
   // 지난 날에 아무것도 안 골랐으면 빈 칸 세 개를 보여줄 이유가 없다
-  focus3El.style.display = (!stars.length && viewDate < todayStr) ? "none" : "";
+  focus3El.style.display = (!stars.length && !evStars.length && viewDate < todayStr) ? "none" : "";
+  const evFilled = evStars.map(e => `<div class="f3${e.done ? " done" : ""}${e.recurring ? " recurring" : ""}"
+      data-ev="${e.eventId}" data-date="${e.occurrenceDate}" data-done="${e.done ? 1 : 0}">
+      <div class="box">${e.done ? "✓" : ""}</div><div class="ev-time">${evTimeLabel(e)}</div>
+      <div class="name">${esc(e.title)}</div></div>`);
   const filled = stars.map(t => {
     const plan = planLabel(t);
     return `<div class="f3${t.done ? " done" : ""}" data-id="${t.id}" data-done="${t.done ? 1 : 0}">
@@ -1887,9 +2032,9 @@ function renderFocus3() {
       ${t.done ? "" : `<div class="play" title="이 할 일로 타이머">▶</div>`}
     </div>`;
   });
-  const empties = Array.from({ length: Math.max(0, 3 - stars.length) },
+  const empties = Array.from({ length: Math.max(0, 3 - stars.length - evStars.length) },
     () => `<div class="f3 empty-slot">비어 있음</div>`);
-  focus3SlotsEl.innerHTML = [...filled, ...empties].join("");
+  focus3SlotsEl.innerHTML = [...evFilled, ...filled, ...empties].join("");
 }
 
 // ── 하루 성적 바 ── 지금 몇 개 중 몇 개인지 + 하루 닫기 버튼
@@ -2154,6 +2299,8 @@ function showWtPop(block) {
 
 function renderAll() {
   renderDateNav();
+  renderPins();
+  renderFatigue();
   renderHero();
   renderDayScore();
   renderAttend();
@@ -2173,21 +2320,35 @@ eventsEl.addEventListener("click", ev => {
   const row = ev.target.closest(".event");
   if (!row?.dataset.id) return;
   if (ev.target.closest(".ev-check")) {
-    // 오른쪽 체크박스 = 완료 토글 (낙관적: 즉시 반영, 서버 백그라운드)
+    // 오른쪽 체크박스 = 완료 토글
     ev.stopPropagation();
-    const willDone = row.dataset.done !== "1";
-    row.dataset.done = willDone ? "1" : "0";
-    row.classList.toggle("done", willDone);
-    if (willDone) row.classList.remove("past");
-    row.querySelector(".ev-check").textContent = willDone ? "✓" : "";
-    apiFetch(`/api/events/${row.dataset.id}/done`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ date: row.dataset.date, done: willDone }),
-    }).then(r => r.json()).then(j => { gotWater(j.water); refreshScores(); }).catch(() => {});
+    setEventDone(Number(row.dataset.id), row.dataset.date, row.dataset.done !== "1");
+  } else if (ev.target.closest(".star")) {
+    ev.stopPropagation();
+    toggleEventStar(Number(row.dataset.id), row.dataset.date, !ev.target.closest(".star").classList.contains("on"));
   } else {
     openEventEditor(Number(row.dataset.id), row.dataset.date);
   }
 });
+// 일정 회차 완료 토글 (낙관적: 목록·핵심 칸을 즉시 다시 그리고 서버는 백그라운드)
+function setEventDone(id, date, willDone) {
+  for (const e of events) if (e.eventId === id && e.occurrenceDate === date) e.done = willDone;
+  renderEvents();
+  renderFocus3();
+  apiFetch(`/api/events/${id}/done`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ date, done: willDone }),
+  }).then(r => r.json()).then(j => { gotWater(j.water); refreshScores(); }).catch(() => {});
+}
+// 일정 회차를 오늘 핵심으로. 할 일과 합쳐 3칸 — 서버가 넘치면 거절한다.
+async function toggleEventStar(id, date, willStar) {
+  const r = await apiFetch(`/api/events/${id}/star`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ date, day: viewDate, star: willStar }),
+  });
+  if (!r.ok) { alert((await r.json()).error || "바꾸지 못했어요"); return; }
+  await loadDay(viewDate);
+}
 // 할 일 완료 토글 (낙관적: 화면 즉시 반영, 서버는 백그라운드 → 렉 체감 제거)
 function toggleTaskDone(row, id) {
   const willDone = row.dataset.done !== "1";
@@ -2229,6 +2390,12 @@ tasksEl.addEventListener("click", ev => {
 
 focus3SlotsEl.addEventListener("click", ev => {
   const row = ev.target.closest(".f3");
+  if (row?.dataset.ev) {   // 핵심으로 뽑은 일정
+    const id = Number(row.dataset.ev);
+    if (ev.target.closest(".box")) setEventDone(id, row.dataset.date, row.dataset.done !== "1");
+    else openEventEditor(id, row.dataset.date);
+    return;
+  }
   if (!row?.dataset.id) return;
   const id = Number(row.dataset.id);
   if (ev.target.closest(".play")) { ev.stopPropagation(); startTimerFor(id); }
@@ -2243,8 +2410,11 @@ function refreshScores() {
   clearTimeout(scoreTimer);
   scoreTimer = setTimeout(async () => {
     try {
-      const j = await (await apiFetch(
-        `/api/scores?from=${weekData[0].date}&to=${weekData[6].date}`)).json();
+      const [j, f] = await Promise.all([
+        apiFetch(`/api/scores?from=${weekData[0].date}&to=${weekData[6].date}`).then(r => r.json()),
+        apiFetch(`/api/fatigue?date=${viewDate}`).then(r => r.json()).catch(() => null),
+      ]);
+      if (f) { fatigueNow = f; renderFatigue(); }
       scores = j.scores ?? scores;
       streakN = j.streak ?? streakN;
       renderDayScore();
@@ -2296,6 +2466,7 @@ function showView(name) {
   btnTimer.classList.toggle("on", name === "timer");
   btnGarden.classList.toggle("on", name === "garden");
   heroEl.style.display = hideDate ? "none" : "";
+  pinsEl.style.display = hideDate ? "none" : "";
   chatBarEl.style.display = hideDate ? "none" : "";
   if (hideDate) dayScoreEl.style.display = "none";
   else { dayScoreEl.style.display = ""; renderDayScore(); }

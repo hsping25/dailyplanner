@@ -110,6 +110,19 @@ export function fatigue(date, events, tasks, prev = null) {
   const level = score >= 70 ? "빡빡" : score >= 40 ? "보통" : "여유";
   return { score, level, busyMin: busy, factors: parts.map(p => p.label) };
 }
+// 그날의 피로도 — ✨ 시트와 헤더의 숫자가 같은 값을 쓰도록 한 곳에서 계산한다.
+// tasks = 그날 보이는 할 일들(마감 없는 것·앞날 마감이 섞여 있어도 된다, 여기서 거른다).
+// 그날 것(마감·핵심·plan_at) + (오늘·앞날이면) 밀린 것만 센다. 마감 없는 건 오늘 꼭 할 부담이 아니다.
+export function dayFatigue(date, events, yEvents, tasks, ymood = null) {
+  const inDay = t => t.due === date || t.star_date === date || !!t.plan_at?.startsWith(date);
+  const overdue = date >= todayStr() ? tasks.filter(t => !inDay(t) && t.due && t.due < date) : [];
+  const counted = [...tasks.filter(inDay), ...overdue];
+  return fatigue(date, events, counted, {
+    mood: ymood,
+    busy: fatigue(shiftDate(date, -1), yEvents, []).busyMin,
+    overdue: overdue.filter(t => !t.done && !t.archived).length,
+  });
+}
 // 제안 개수 상한 — 여유로운 날엔 건드리지 않는다
 const SUGGEST_CAP = { 여유: 0, 보통: 1, 빡빡: 3 };
 
@@ -142,7 +155,7 @@ async function dayContext(user, date) {
   const yday = shiftDate(date, -1);
   const [loaded, byDate, ylog] = await Promise.all([
     loadEvents(user),
-    tasksByDateInRange(user, yday, date),
+    tasksByDateInRange(user, date, date),   // 어제는 일정 시간만 본다(할 일 불필요)
     get('SELECT mood FROM day_log WHERE "user" = ? AND date = ?', [user, yday]),
   ]);
   // 앱 목록에 보이는 할 일은 전부 본다: 그날 것(마감·핵심) + plan_at이 그날인 것
@@ -159,10 +172,7 @@ async function dayContext(user, date) {
     : t.due && t.due < date ? "밀림" : "마감 없음";
   const w = dayWindow(date), yw = dayWindow(yday);
   const events = expand(loaded, w.start, w.end);
-  const yBusy = fatigue(yday, expand(loaded, yw.start, yw.end), [...(byDate.get(yday)?.values() ?? [])]).busyMin;
-  // 피로도엔 오늘 것 + 밀린 것만 (마감 없는 건 오늘 꼭 할 부담이 아니다)
-  const fat = fatigue(date, events, tasks.filter(t => group(t) !== "마감 없음"),
-    { mood: ylog?.mood ?? null, busy: yBusy, overdue: tasks.filter(t => group(t) === "밀림").length });
+  const fat = dayFatigue(date, events, expand(loaded, yw.start, yw.end), tasks, ylog?.mood ?? null);
 
   // 수정 후보: 필수가 아니고, 아직 안 했고, (오늘이면) 아직 시작 안 한 것만.
   // 마감 없는 할 일은 옮길 날짜가 없으니 후보에서 뺀다(언급만).
@@ -170,7 +180,7 @@ async function dayContext(user, date) {
     ...events.map(e => ({
       ref: `e${e.eventId}`, kind: "일정", title: e.title,
       when: e.allday ? "종일" : `${hhmm(e.start)}~${hhmm(e.end)}`,
-      recurring: e.recurring, done: e.done, must: !!loaded.events.find(x => x.id === e.eventId)?.must,
+      recurring: e.recurring, done: e.done, star: e.star, must: !!loaded.events.find(x => x.id === e.eventId)?.must,
       movable: canTouch && !e.done && !(date === today && e.start <= now),
     })),
     ...tasks.map(t => ({

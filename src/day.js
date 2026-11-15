@@ -38,14 +38,15 @@ export function dayWindow(date) {
   };
 }
 
-// 사용자의 이벤트 + 예외 + 완료체크를 한 번에 로드 (여러 날짜 창에 재사용해 DB 조회 절약)
+// 사용자의 이벤트 + 예외 + 완료체크 + 핵심 지정을 한 번에 로드 (여러 날짜 창에 재사용해 DB 조회 절약)
 export async function loadEvents(user = "기본") {
-  // 세 쿼리는 서로 의존하지 않으므로 동시에 던진다. Postgres(Neon)에선 왕복 하나가 곧 지연이라
-  // 순차로 await하면 3배로 기다리게 된다.
-  const [events, exceptions, dones] = await Promise.all([
+  // 네 쿼리는 서로 의존하지 않으므로 동시에 던진다. Postgres(Neon)에선 왕복 하나가 곧 지연이라
+  // 순차로 await하면 그만큼 곱해서 기다리게 된다.
+  const [events, exceptions, dones, stars] = await Promise.all([
     all('SELECT * FROM events WHERE "user" = ?', [user]),
     all("SELECT * FROM event_exceptions", []),
     all("SELECT event_id, date FROM event_done", []),
+    all("SELECT event_id, date FROM event_star", []),
   ]);
   const byEvent = new Map();
   for (const x of exceptions) {
@@ -57,14 +58,18 @@ export async function loadEvents(user = "기본") {
     if (!doneByEvent.has(dn.event_id)) doneByEvent.set(dn.event_id, new Set());
     doneByEvent.get(dn.event_id).add(dn.date);
   }
-  return { events, byEvent, doneByEvent };
+  const starKeys = new Set(stars.map(s => `${s.event_id}|${s.date}`));
+  return { events, byEvent, doneByEvent, starKeys };
 }
 
 // 로드된 이벤트를 특정 시간창으로 펼친다 (순수 계산, DB 접근 없음)
 export function expand(loaded, start, end) {
   const out = [];
   for (const e of loaded.events) {
-    out.push(...expandEvent(e, start, end, loaded.byEvent.get(e.id) ?? [], loaded.doneByEvent?.get(e.id) ?? null));
+    for (const o of expandEvent(e, start, end, loaded.byEvent.get(e.id) ?? [], loaded.doneByEvent?.get(e.id) ?? null)) {
+      o.star = !!loaded.starKeys?.has(`${o.eventId}|${o.occurrenceDate}`);   // 이 회차를 핵심으로 뽑았나
+      out.push(o);
+    }
   }
   out.sort((a, b) => a.start.localeCompare(b.start));
   return out;

@@ -83,6 +83,19 @@ export async function initDb() {
     date TEXT NOT NULL,
     PRIMARY KEY (event_id, date)
   )`);
+  // 일정 회차를 "오늘 핵심"으로 뽑은 기록. date = 회차 날짜(occurrenceDate, event_done과 같은 기준).
+  await run(`CREATE TABLE IF NOT EXISTS event_star (
+    event_id INTEGER NOT NULL,
+    date TEXT NOT NULL,
+    PRIMARY KEY (event_id, date)
+  )`);
+  // 디데이: 아이디마다 여러 개. 위 띠에는 다가오는 것만 가까운 순으로.
+  await run(`CREATE TABLE IF NOT EXISTS ddays (
+    id ${AUTO},
+    "user" TEXT NOT NULL,
+    title TEXT NOT NULL,
+    date TEXT NOT NULL
+  )`);
   await run(`CREATE TABLE IF NOT EXISTS tg_link ("user" TEXT PRIMARY KEY, chat_id TEXT, code TEXT)`);
   await run(`CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT)`);
   await run(`CREATE TABLE IF NOT EXISTS tasks (
